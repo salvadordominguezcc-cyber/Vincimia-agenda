@@ -24,6 +24,7 @@ Pages + GitHub. El mismo stack del POS de EL RODEO.
 |---|---|
 | **Login** (`/login`) | Entrar, crear cuenta y recuperar contraseña con Supabase Auth. Al registrarse, el usuario queda ligado a la Org #1 piloto (ver `AUTH_SETUP.md`). |
 | **Agenda** (`/dashboard`) | Agenda unificada del día, con alerta de conflictos, Confirmar, Check-in (completed) y Cancelar. **Exige sesión** cuando Supabase está configurado; sin sesión redirige a `/login`. |
+| **Calendario** (`/dashboard/calendario`) | Vista tipo Google Calendar por semana y por día (8:00–20:00), con color por origen de la cita: Google Calendar azul, Promotor verde, Link público morado, WhatsApp turquesa. Cada cita marca si es la **primera vez** que viene el cliente o si **ya había venido**, calculado del historial del mismo contacto. Al pulsar una cita se ve el detalle y se puede confirmar, hacer check-in o cancelar. |
 | **Nueva cita** (`/dashboard/nueva`) | Crea cita validando el anti-empalme. Si choca, NO se guarda: muestra con quién choca y ofrece guardarla como `conflict`. |
 | **Promotores** (`/dashboard/promotores`) | Alta de promotores y liquidación: comisiones **solo sobre citas `completed`**, con `commission_rate` en %. |
 | **Servicios** (`/dashboard/servicios`) | Alta/baja de servicios; la duración es la que usa el anti-empalme. |

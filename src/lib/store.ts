@@ -277,6 +277,26 @@ export function saveAsConflict(
   return appointment;
 }
 
+/**
+ * ¿Es la primera vez que viene este cliente?
+ * Se calcula del historial del mismo contacto: es primera vez si no
+ * tiene ninguna cita anterior (con hora de inicio anterior a esta) que
+ * no esté cancelada ni en conflicto. No se inventa el dato: si el
+ * cliente ya tuvo una cita antes, aunque fuera otro día, es que ya
+ * había venido.
+ */
+export function isFirstVisit(data: StoreData, appt: Appointment): boolean {
+  if (!appt.contact_id) return true;
+  return !data.appointments.some(
+    (a) =>
+      a.id !== appt.id &&
+      a.contact_id === appt.contact_id &&
+      a.start_time < appt.start_time &&
+      a.status !== "cancelled" &&
+      a.status !== "conflict"
+  );
+}
+
 export function setStatus(
   data: StoreData,
   id: string,
