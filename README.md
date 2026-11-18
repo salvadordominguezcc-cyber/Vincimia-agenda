@@ -29,6 +29,7 @@ Pages + GitHub. El mismo stack del POS de EL RODEO.
 | **Servicios** (`/dashboard/servicios`) | Alta/baja de servicios; la duración es la que usa el anti-empalme. |
 | **Conectores** (`/dashboard/conectores`) | Estado real: Google Calendar **pendiente**, Sheets **listo**, WhatsApp **Fase 2**. |
 | **Link público** (`/dashboard/link`) | Link `vincimia.link/slug`, copiar, y editor del buffer (5/10/15/30 min). |
+| **Ajustes** (`/dashboard/ajustes`) | Cambia los datos del negocio (nombre, enlace, tiempo entre citas, correo de Google Calendar) y borra los datos de ejemplo con doble confirmación. Guarda en localStorage y en Supabase (update en `organizations` + deletes en `appointments`/`contacts`/`services`/`promoters`); no borra la organización ni la cuenta. |
 | **Reserva pública** (`/reserva/[slug]`) | El cliente elige servicio, fecha y solo ve horarios libres. Crea la cita en `pending` y el contacto si no existe. |
 | **Webhook Sheets** (`/api/webhook/sheets`) | Recibe filas de Google Sheets con secreto Bearer, corre el anti-empalme en Supabase y responde `success` o `conflict`. |
 | **Edge Function** (`supabase/functions/sync-excel-promoter`) | Misma lógica del webhook, para quien prefiera que viva en Supabase. Usa una u otra, no las dos. |

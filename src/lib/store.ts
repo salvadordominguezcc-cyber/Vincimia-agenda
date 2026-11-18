@@ -33,6 +33,12 @@ export interface StoreData {
   contacts: Contact[];
   appointments: Appointment[];
   seededFor: string;
+  /**
+   * true cuando el usuario borró los datos de ejemplo en Ajustes.
+   * Evita que loadStore() vuelva a sembrar las citas de ejemplo al
+   * cambiar el día: sin este flag, borrar la agenda solo duraba un día.
+   */
+  demoCleared?: boolean;
 }
 
 function seed(): StoreData {
@@ -43,6 +49,7 @@ function seed(): StoreData {
     contacts: DEMO_CONTACTS,
     appointments: DEMO_APPOINTMENTS,
     seededFor: todayISO(),
+    demoCleared: false,
   };
 }
 
@@ -58,7 +65,14 @@ export function loadStore(): StoreData {
     const parsed = JSON.parse(raw) as StoreData;
     // Cada día se regeneran las citas de ejemplo para que la Agenda
     // de hoy siempre tenga datos con los que probar el anti-empalme.
+    // Salvo que el usuario ya haya borrado los datos de ejemplo en
+    // Ajustes: en ese caso no se vuelve a sembrar nada.
     if (parsed.seededFor !== todayISO()) {
+      if (parsed.demoCleared) {
+        const kept: StoreData = { ...parsed, seededFor: todayISO() };
+        localStorage.setItem(KEY, JSON.stringify(kept));
+        return kept;
+      }
       const s = seed();
       s.services = parsed.services;
       s.promoters = parsed.promoters;
@@ -82,6 +96,25 @@ export function resetDemo() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(KEY);
   window.location.reload();
+}
+
+/**
+ * Borra los datos de ejemplo (citas, clientes, servicios y promotores)
+ * y marca el almacén para que no se vuelvan a sembrar al cambiar el día.
+ * La organización NO se toca: queda con los datos que el usuario haya
+ * puesto en Ajustes, lista para cargar los datos reales.
+ */
+export function clearDemoData(data: StoreData): StoreData {
+  const next: StoreData = {
+    ...data,
+    services: [],
+    promoters: [],
+    contacts: [],
+    appointments: [],
+    demoCleared: true,
+  };
+  saveStore(next);
+  return next;
 }
 
 export function contactName(data: StoreData, id: string | null): string {

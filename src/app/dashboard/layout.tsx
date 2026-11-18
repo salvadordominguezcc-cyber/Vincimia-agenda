@@ -15,6 +15,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ensureMembership } from "@/lib/auth";
 import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
+import { loadStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/dashboard/servicios", label: "Servicios" },
   { href: "/dashboard/conectores", label: "Conectores" },
   { href: "/dashboard/link", label: "Link público" },
+  { href: "/dashboard/ajustes", label: "Ajustes" },
 ];
 
 export default function DashboardLayout({
@@ -36,7 +38,18 @@ export default function DashboardLayout({
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
+  // Enlace actual del negocio (cambia en Ajustes); si aún no se ha
+  // cargado, se usa el de ejemplo.
+  const [orgSlug, setOrgSlug] = useState("clinica-sonrisa");
   const demo = !supabaseConfigured();
+
+  useEffect(() => {
+    try {
+      setOrgSlug(loadStore().org.slug || "clinica-sonrisa");
+    } catch {
+      // Se queda el de ejemplo.
+    }
+  }, []);
 
   useEffect(() => {
     if (demo) {
@@ -105,7 +118,7 @@ export default function DashboardLayout({
               <span className="hidden text-sm text-slate-600 sm:inline">{email}</span>
             )}
             <Link
-              href="/reserva/clinica-sonrisa"
+              href={`/reserva/${orgSlug}`}
               className="text-sm font-medium text-brand-700 hover:underline"
             >
               Ver link público →

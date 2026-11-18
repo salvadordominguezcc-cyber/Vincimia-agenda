@@ -40,6 +40,18 @@ ya están en Production (`NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SITE_URL`) son las que usa el Auth. La ruta
 `/api/auth/membership` usa la `service_role` que ya está guardada.
 
+## 4. Ajustes: no hace falta ninguna regla nueva
+
+La pantalla **Ajustes** (`/dashboard/ajustes`) actualiza el negocio y
+borra los datos de ejemplo directamente con la sesión del usuario.
+Las reglas que ya están en `supabase/schema.sql` lo permiten: la
+organización se puede actualizar siendo miembro (`org_update_members`)
+y las citas, clientes, servicios y promotores se pueden borrar siendo
+miembro (reglas `FOR ALL` de cada tabla). Solo hace falta que el
+usuario ya tenga su acceso a la Org #1, que el panel crea solo al
+entrar (ver `/api/auth/membership`). Borrar los datos de ejemplo no
+borra la organización, la membresía ni el usuario.
+
 ## Cómo probar (después del despliegue automático)
 
 1. Abre https://vincimia-agenda.pages.dev/login
