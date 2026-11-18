@@ -1,7 +1,21 @@
+// Layout del panel — con guard de autenticación.
+// Cuando Supabase está configurado, el panel exige sesión: sin sesión se
+// redirige a /login?next=<ruta>. Cuando NO está configurado (modo demo
+// local, sin variables de entorno), el panel abre como antes, sin login.
+// La protección es en el navegador: las páginas del panel son estáticas y
+// los datos demo viven en localStorage; los datos reales en Supabase están
+// protegidos por RLS y las rutas /api/* usan la service_role en el servidor.
+// La reserva pública (/reserva/[slug]) y la portada (/) NO pasan por aquí
+// y siguen públicas.
+
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ensureMembership } from "@/lib/auth";
+import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -19,6 +33,54 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
+  const [email, setEmail] = useState<string | null>(null);
+  const demo = !supabaseConfigured();
+
+  useEffect(() => {
+    if (demo) {
+      setChecking(false);
+      return;
+    }
+    const client = supabaseBrowser();
+    if (!client) {
+      setChecking(false);
+      return;
+    }
+    client.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        router.replace(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+        return;
+      }
+      setEmail(session.user.email ?? null);
+      await ensureMembership();
+      setChecking(false);
+    });
+    const { data: sub } = client.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+      } else {
+        setEmail(session.user.email ?? null);
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [demo, pathname, router]);
+
+  const signOut = async () => {
+    const client = supabaseBrowser();
+    if (client) await client.auth.signOut();
+    router.replace("/login");
+  };
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6 text-slate-500">
+        Verificando sesión…
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
@@ -29,15 +91,31 @@ export default function DashboardLayout({
             </span>
             Vincimia Agenda
           </Link>
-          <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
-            Modo demo — datos de ejemplo, nada en la nube
-          </span>
-          <Link
-            href="/reserva/clinica-sonrisa"
-            className="ml-auto text-sm font-medium text-brand-700 hover:underline"
-          >
-            Ver link público →
-          </Link>
+          {demo ? (
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+              Modo demo — datos de ejemplo, nada en la nube
+            </span>
+          ) : (
+            <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+              Conectado a Supabase
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            {email && (
+              <span className="hidden text-sm text-slate-600 sm:inline">{email}</span>
+            )}
+            <Link
+              href="/reserva/clinica-sonrisa"
+              className="text-sm font-medium text-brand-700 hover:underline"
+            >
+              Ver link público →
+            </Link>
+            {!demo && (
+              <Button variant="outline" size="sm" onClick={signOut}>
+                Cerrar sesión
+              </Button>
+            )}
+          </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 pb-2 pt-2">
           {NAV.map((item) => (

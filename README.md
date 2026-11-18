@@ -22,7 +22,8 @@ Pages + GitHub. El mismo stack del POS de EL RODEO.
 
 | Pantalla / pieza | Qué hace |
 |---|---|
-| **Agenda** (`/dashboard`) | Agenda unificada del día, con alerta de conflictos, Confirmar, Check-in (completed) y Cancelar. |
+| **Login** (`/login`) | Entrar, crear cuenta y recuperar contraseña con Supabase Auth. Al registrarse, el usuario queda ligado a la Org #1 piloto (ver `AUTH_SETUP.md`). |
+| **Agenda** (`/dashboard`) | Agenda unificada del día, con alerta de conflictos, Confirmar, Check-in (completed) y Cancelar. **Exige sesión** cuando Supabase está configurado; sin sesión redirige a `/login`. |
 | **Nueva cita** (`/dashboard/nueva`) | Crea cita validando el anti-empalme. Si choca, NO se guarda: muestra con quién choca y ofrece guardarla como `conflict`. |
 | **Promotores** (`/dashboard/promotores`) | Alta de promotores y liquidación: comisiones **solo sobre citas `completed`**, con `commission_rate` en %. |
 | **Servicios** (`/dashboard/servicios`) | Alta/baja de servicios; la duración es la que usa el anti-empalme. |
@@ -188,10 +189,15 @@ Falta:
 - **Modo demo sin Supabase:** los datos viven en localStorage del
   navegador, no se comparten entre dispositivos y el webhook responde
   503. Es solo para probar el anti-empalme sin cuentas.
-- **Sin autenticación en el panel demo:** cualquiera que abra el link ve
-  la agenda de ejemplo. Al conectar Supabase, el RLS protege los datos,
-  pero el login (Auth) es el siguiente paso antes de usarlo con clientes
-  reales: hoy el panel no pide usuario ni contraseña.
+- **Autenticación:** el panel exige login con Supabase Auth cuando
+  Supabase está configurado (ver `AUTH_SETUP.md`: Site URL y Redirect
+  URLs en Supabase). Sin Supabase configurado, el panel sigue en modo
+  demo local sin login. La reserva pública no pide login.
+- **Los datos del panel todavía viven en localStorage (demo):** el login
+  protege la puerta del panel, pero la Agenda, Nueva cita, Promotores y
+  Servicios aún leen/escriben el almacén local del navegador, no las
+  tablas de Supabase. Migrar ese almacén a Supabase (con RLS) es el
+  siguiente paso; el webhook de Sheets sí escribe ya en la nube.
 - **El webhook y la Edge Function hacen lo mismo:** usa solo una de las
   dos rutas para Sheets, no las dos.
 - **Sin sincronización en tiempo real:** si dos personas crean la misma

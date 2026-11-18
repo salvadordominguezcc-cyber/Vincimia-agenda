@@ -58,8 +58,8 @@ export default function Home() {
             <Link href="/reserva/clinica-sonrisa">
               <Button variant="ghost">Reservar cita</Button>
             </Link>
-            <Link href="/dashboard">
-              <Button>Entrar al panel</Button>
+            <Link href="/login">
+              <Button>Entrar</Button>
             </Link>
           </nav>
         </div>
@@ -79,8 +79,8 @@ export default function Home() {
             con motor anti-empalmes y comisiones por cita completada.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/dashboard">
-              <Button size="lg">Ver la agenda demo</Button>
+            <Link href="/login">
+              <Button size="lg">Entrar al panel</Button>
             </Link>
             <Link href="/reserva/clinica-sonrisa">
               <Button size="lg" variant="outline">
@@ -89,8 +89,9 @@ export default function Home() {
             </Link>
           </div>
           <p className="mt-4 text-sm text-slate-500">
-            Modo demo: datos de ejemplo de la Clínica Dental Sonrisa (Org #1).
-            Nada se guarda en la nube hasta conectar Supabase.
+            El panel requiere cuenta (correo y contraseña). La reserva
+            pública no pide login: el cliente reserva solo y la cita nace en
+            pendiente.
           </p>
         </section>
 
