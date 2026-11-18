@@ -1,0 +1,19 @@
+# Dependencias y builds
+node_modules/
+.next/
+.vercel/
+out/
+
+# Secretos: NUNCA subir llaves reales
+.env
+.env.local
+.env*.local
+
+# Cloudflare / Wrangler
+.dev.vars
+.wrangler/
+wrangler.toml.bak
+
+# Sistema
+.DS_Store
+*.log

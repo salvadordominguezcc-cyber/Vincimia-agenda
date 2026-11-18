@@ -1,0 +1,18 @@
+# Cloudflare Pages — Vincimia Agenda
+#
+# CAMBIA EL NOMBRE: pon aquí el nombre de tu proyecto en Cloudflare
+# Pages (será https://TU-NOMBRE.pages.dev salvo dominio propio).
+# El comando de despliegue en package.json usa el mismo nombre.
+name = "vincimia-agenda"
+
+# Fecha de compatibilidad del runtime de Workers. El flag nodejs_compat
+# es necesario para que @cloudflare/next-on-pages (y supabase-js) puedan
+# usar APIs de Node.js dentro del runtime edge. En el panel de
+# Cloudflare, Settings → Functions → Compatibility Flags, debe estar
+# también activado `nodejs_compat` para Production y Preview.
+compatibility_date = "2025-07-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Salida que genera `npx @cloudflare/next-on-pages` (ver package.json,
+# script "build:cloudflare"). Es lo que Cloudflare Pages publica.
+pages_build_output_dir = ".vercel/output/static"

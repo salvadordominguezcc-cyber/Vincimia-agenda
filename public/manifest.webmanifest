@@ -1,0 +1,21 @@
+{
+  "background_color": "#f8fafc",
+  "description": "Vincimia Agenda: gestión inteligente de citas con motor anti-empalmes, link público y promotores por Google Sheets.",
+  "display": "standalone",
+  "icons": [
+    {
+      "sizes": "192x192",
+      "src": "/icon.svg",
+      "type": "image/svg+xml"
+    },
+    {
+      "sizes": "512x512",
+      "src": "/icon.svg",
+      "type": "image/svg+xml"
+    }
+  ],
+  "name": "Vincimia Agenda",
+  "short_name": "Vincimia Agenda",
+  "start_url": "/",
+  "theme_color": "#4338ca"
+}

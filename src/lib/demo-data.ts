@@ -1,0 +1,114 @@
+// Datos de ejemplo de Vincimia Agenda — Org #1, una clínica dental.
+// SOLO PARA PROBAR EL MVP EN MODO DEMO (localStorage, nada se guarda en la nube).
+// Las citas se generan para HOY, para que la Agenda siempre tenga qué mostrar.
+// Caso de conflicto incluido tal cual en el Documento Maestro (pág. 5):
+// Laura Méndez 10:00 (45 min, hasta 10:45 + 15 min de buffer = 11:00) y
+// Luis Soto 10:15 (30 min) se traslapan → Luis queda en estado "conflict".
+
+import type {
+  Appointment,
+  Contact,
+  Organization,
+  Promoter,
+  Service,
+} from "./types";
+
+export const DEMO_ORG_ID = "11111111-1111-1111-1111-111111111111";
+
+export function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function at(time: string): string {
+  return `${todayISO()}T${time}:00`;
+}
+
+function end(start: string, minutes: number): string {
+  // Fin en hora local (sin pasar por UTC, para no mover la hora).
+  const [h, m] = start.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  const hh = String(Math.floor(total / 60)).padStart(2, "0");
+  const mm = String(total % 60).padStart(2, "0");
+  return `${todayISO()}T${hh}:${mm}:00`;
+}
+
+export const DEMO_ORG: Organization = {
+  id: DEMO_ORG_ID,
+  name: "Clínica Dental Sonrisa",
+  slug: "clinica-sonrisa",
+  buffer_minutes: 15,
+  whatsapp_bot_enabled: false,
+  google_calendar_sync: false,
+  connected_google_email: null,
+  google_calendar_id: "primary",
+  excel_webhook_secret: "demo-secreto-sheets-cambiar-en-supabase",
+  created_at: new Date().toISOString(),
+};
+
+export const DEMO_SERVICES: Service[] = [
+  { id: "svc-consulta", organization_id: DEMO_ORG_ID, name: "Consulta General", duration_minutes: 45, price: 500, follow_up_days: 30, active: true, created_at: new Date().toISOString() },
+  { id: "svc-limpieza", organization_id: DEMO_ORG_ID, name: "Valoración + Limpieza", duration_minutes: 60, price: 800, follow_up_days: 180, active: true, created_at: new Date().toISOString() },
+  { id: "svc-revision", organization_id: DEMO_ORG_ID, name: "Revisión Inicial", duration_minutes: 30, price: 350, follow_up_days: 30, active: true, created_at: new Date().toISOString() },
+  { id: "svc-ortodoncia", organization_id: DEMO_ORG_ID, name: "Control de Ortodoncia", duration_minutes: 30, price: 600, follow_up_days: 30, active: true, created_at: new Date().toISOString() },
+];
+
+export const DEMO_PROMOTERS: Promoter[] = [
+  { id: "prom-carlos", organization_id: DEMO_ORG_ID, name: "Carlos M.", code: "CARLOS", phone: "+52 686 111 2233", commission_rate: 10, active: true, created_at: new Date().toISOString() },
+  { id: "prom-ana", organization_id: DEMO_ORG_ID, name: "Ana R.", code: "ANA", phone: "+52 686 444 5566", commission_rate: 10, active: true, created_at: new Date().toISOString() },
+];
+
+export const DEMO_CONTACTS: Contact[] = [
+  { id: "ct-roberto", organization_id: DEMO_ORG_ID, full_name: "Roberto Gómez", phone: "+52 686 123 4567", email: null, last_visit: at("09:00"), created_at: new Date().toISOString() },
+  { id: "ct-laura", organization_id: DEMO_ORG_ID, full_name: "Laura Méndez", phone: "+52 686 987 6543", email: null, last_visit: null, created_at: new Date().toISOString() },
+  { id: "ct-luis", organization_id: DEMO_ORG_ID, full_name: "Luis Soto", phone: "+52 686 555 0199", email: null, last_visit: null, created_at: new Date().toISOString() },
+  { id: "ct-sofia", organization_id: DEMO_ORG_ID, full_name: "Sofía Castro", phone: "+52 686 777 8899", email: null, last_visit: null, created_at: new Date().toISOString() },
+  { id: "ct-mariana", organization_id: DEMO_ORG_ID, full_name: "Mariana Torres", phone: "+52 686 222 3344", email: null, last_visit: null, created_at: new Date().toISOString() },
+];
+
+export const DEMO_APPOINTMENTS: Appointment[] = [
+  {
+    id: "apt-1", organization_id: DEMO_ORG_ID, contact_id: "ct-roberto",
+    service_id: "svc-consulta", promoter_id: null,
+    start_time: at("09:00"), end_time: end("09:00", 45), duration_minutes: 45,
+    price: 500, status: "completed", source: "google_calendar",
+    notes: "Cita creada a mano en Google Calendar.", whatsapp_confirmed: false,
+    google_event_id: null, created_at: new Date().toISOString(),
+  },
+  {
+    id: "apt-2", organization_id: DEMO_ORG_ID, contact_id: "ct-laura",
+    service_id: "svc-limpieza", promoter_id: "prom-carlos",
+    start_time: at("10:00"), end_time: end("10:00", 60), duration_minutes: 60,
+    price: 800, status: "confirmed", source: "excel_promoter",
+    notes: "Promotor: Carlos M.", whatsapp_confirmed: false,
+    google_event_id: null, created_at: new Date().toISOString(),
+  },
+  {
+    id: "apt-3", organization_id: DEMO_ORG_ID, contact_id: "ct-luis",
+    service_id: "svc-revision", promoter_id: "prom-ana",
+    start_time: at("10:15"), end_time: end("10:15", 30), duration_minutes: 30,
+    price: 350, status: "conflict", source: "excel_promoter",
+    notes: "CONFLICTO: choca con Laura Méndez 10:00–11:00 + 15 min de buffer (hasta 11:15). No se le cobra comisión.",
+    whatsapp_confirmed: false, google_event_id: null,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: "apt-4", organization_id: DEMO_ORG_ID, contact_id: "ct-sofia",
+    service_id: "svc-consulta", promoter_id: null,
+    start_time: at("11:30"), end_time: end("11:30", 45), duration_minutes: 45,
+    price: 500, status: "pending", source: "vincimia_link",
+    notes: "Reservó desde el link público.", whatsapp_confirmed: false,
+    google_event_id: null, created_at: new Date().toISOString(),
+  },
+  {
+    id: "apt-5", organization_id: DEMO_ORG_ID, contact_id: "ct-mariana",
+    service_id: "svc-ortodoncia", promoter_id: "prom-carlos",
+    start_time: at("12:30"), end_time: end("12:30", 30), duration_minutes: 30,
+    price: 600, status: "pending", source: "excel_promoter",
+    notes: "Promotor: Carlos M.", whatsapp_confirmed: false,
+    google_event_id: null, created_at: new Date().toISOString(),
+  },
+];
