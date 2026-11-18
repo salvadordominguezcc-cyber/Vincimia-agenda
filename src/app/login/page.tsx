@@ -92,7 +92,15 @@ function LoginForm() {
     const client = supabaseBrowser();
     if (!client) return;
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !password) {
+    // La recuperación solo pide el correo: no hay campo de contraseña en
+    // ese modo y exigirla bloqueaba el envío del enlace (bug reportado
+    // 2026-11-18: "Escribe tu correo y tu contraseña." con solo el correo).
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
+    if (!emailValido) {
+      setError("Escribe un correo válido.");
+      return;
+    }
+    if (mode !== "recuperar" && !password) {
       setError("Escribe tu correo y tu contraseña.");
       return;
     }

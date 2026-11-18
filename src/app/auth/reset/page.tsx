@@ -20,11 +20,24 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  // true cuando Supabase devolvió el enlace con error en el hash, por
+  // ejemplo #error=access_denied&error_code=otp_expired
+  // ("Email link is invalid or has expired"): el enlace ya venció o ya se
+  // usó. Se muestra un mensaje claro en español, no el texto crudo en inglés.
+  const [linkExpired, setLinkExpired] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Leer el error del hash ANTES de pedir la sesión: con un enlace
+    // vencido supabase-js no crea sesión y el hash es la única señal.
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    if (hash.get("error") || hash.get("error_code") === "otp_expired") {
+      setLinkExpired(true);
+      setReady(true);
+      return;
+    }
     if (!supabaseConfigured()) {
       setReady(true);
       return;
@@ -86,8 +99,9 @@ export default function ResetPasswordPage() {
               ) : !hasSession ? (
                 <>
                   <p className="text-sm text-slate-600">
-                    Este enlace no es válido o ya caducó. Pide uno nuevo
-                    desde el login.
+                    {linkExpired
+                      ? "Este enlace ya venció o ya se usó, pide uno nuevo."
+                      : "Este enlace no es válido o ya caducó. Pide uno nuevo desde el login."}
                   </p>
                   <Link href="/login?mode=recuperar" className="mt-4 inline-block">
                     <Button>Pedir otro enlace</Button>
