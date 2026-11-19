@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DoctorChip } from "@/components/DoctorChip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { loadStore, saveStore, type StoreData } from "@/lib/store";
@@ -73,6 +74,7 @@ export default function DoctoresPage() {
   const [name, setName] = useState("");
   const [specialty, setSpecialty] = useState<DoctorSpecialty>("general");
   const [color, setColor] = useState(DOCTOR_COLORS[0]);
+  const [requiresDeposit, setRequiresDeposit] = useState(false);
   const [schedule, setSchedule] = useState<DoctorScheduleDay[]>(defaultSchedule());
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -90,6 +92,7 @@ export default function DoctoresPage() {
     setName(doc ? doc.name : "");
     setSpecialty(doc ? doc.specialty : "general");
     setColor(doc ? doc.color : DOCTOR_COLORS[0]);
+    setRequiresDeposit(doc ? doc.requires_deposit : false);
     setSchedule(doc ? doc.schedule : defaultSchedule());
     setError("");
     setMessage("");
@@ -129,6 +132,7 @@ export default function DoctoresPage() {
         name: doctor.name,
         specialty: doctor.specialty,
         color: doctor.color,
+        requires_deposit: doctor.requires_deposit,
         schedule: doctor.schedule,
         active: doctor.active,
       };
@@ -168,6 +172,7 @@ export default function DoctoresPage() {
       name: cleanName,
       specialty,
       color,
+      requires_deposit: requiresDeposit,
       schedule,
       active: true,
       created_at: new Date().toISOString(),
@@ -187,6 +192,7 @@ export default function DoctoresPage() {
     setName("");
     setSpecialty("general");
     setColor(DOCTOR_COLORS[0]);
+    setRequiresDeposit(false);
     setSchedule(defaultSchedule());
     setMessage(
       ok
@@ -228,6 +234,7 @@ export default function DoctoresPage() {
       setName("");
       setSpecialty("general");
       setColor(DOCTOR_COLORS[0]);
+      setRequiresDeposit(false);
       setSchedule(defaultSchedule());
     }
     setMessage(
@@ -272,16 +279,19 @@ export default function DoctoresPage() {
           <Card key={doc.id} className={cn(!doc.active && "opacity-70")}>
             <CardContent className="space-y-2 pt-5">
               <div className="flex items-start gap-3">
-                <span
-                  className="mt-1 h-4 w-4 shrink-0 rounded-full border border-slate-300"
-                  style={{ backgroundColor: doc.color }}
-                />
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold leading-tight">{doc.name}</p>
+                  <p className="leading-tight">
+                    <DoctorChip name={doc.name} color={doc.color} />
+                  </p>
                   <p className="text-sm text-slate-600">
                     {SPECIALTY_LABEL[doc.specialty]}
                     {!doc.active && " · Pausado"}
                   </p>
+                  {doc.requires_deposit && (
+                    <p className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                      Solo atiende con cita y anticipo
+                    </p>
+                  )}
                   <p className="text-sm text-slate-500">{scheduleSummary(doc.schedule)}</p>
                 </div>
               </div>
@@ -381,6 +391,22 @@ export default function DoctoresPage() {
               </p>
             </div>
             <div>
+              <label className="flex items-start gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={requiresDeposit}
+                  onChange={(e) => setRequiresDeposit(e.target.checked)}
+                  className="mt-0.5"
+                />
+                Solo atiende con cita y anticipo
+              </label>
+              <p className="mt-1 text-xs text-slate-500">
+                Sus citas en línea, por teléfono y por WhatsApp quedan en
+                pausa hasta que la clínica confirme los horarios y el
+                paciente acepte. Todavía no se cobra en línea.
+              </p>
+            </div>
+            <div>
               <label className="text-sm font-medium">Horarios</label>
               <p className="text-xs text-slate-500">
                 Marca los días que atiende y de qué hora a qué hora. Fuera de
@@ -440,6 +466,7 @@ export default function DoctoresPage() {
                     setName("");
                     setSpecialty("general");
                     setColor(DOCTOR_COLORS[0]);
+                    setRequiresDeposit(false);
                     setSchedule(defaultSchedule());
                     setError("");
                   }}

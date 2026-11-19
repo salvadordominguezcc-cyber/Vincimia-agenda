@@ -44,6 +44,12 @@ export interface StoreData {
   demoCleared?: boolean;
 }
 
+/** Id único para citas y contactos nuevos (Date.now() solo puede
+ *  repetirse si se crean dos en el mismo milisegundo). */
+function newId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function seed(): StoreData {
   return {
     org: DEMO_ORG,
@@ -243,6 +249,14 @@ export function createAppointment(
   );
   if (conflict) return { ok: false, conflictWith: conflict };
 
+  // Doctor con anticipo: la cita nace EN PAUSA, en cualquier canal
+  // (en línea, por teléfono o por WhatsApp, todos pasan por aquí).
+  // No se confirma ni bloquea el horario: la clínica primero revisa
+  // los horarios del doctor, le propone unos al paciente y solo cuando
+  // el paciente acepta se confirma (ver confirmAppointment).
+  // Todavía no hay cobro en línea.
+  const needsHold = !!doctor?.requires_deposit;
+
   let contact = data.contacts.find(
     (c) =>
       c.full_name.toLowerCase() === input.clientName.trim().toLowerCase() ||
@@ -250,7 +264,7 @@ export function createAppointment(
   );
   if (!contact) {
     contact = {
-      id: `ct-${Date.now()}`,
+      id: newId("ct"),
       organization_id: data.org.id,
       full_name: input.clientName.trim(),
       phone: input.clientPhone || null,
@@ -261,7 +275,7 @@ export function createAppointment(
     data.contacts = [...data.contacts, contact];
   }
   const appointment: Appointment = {
-    id: `apt-${Date.now()}`,
+    id: newId("apt"),
     organization_id: data.org.id,
     contact_id: contact.id,
     service_id: service.id,
@@ -271,9 +285,10 @@ export function createAppointment(
     end_time: endISO,
     duration_minutes: service.duration_minutes,
     price: service.price,
-    status: "pending",
+    status: needsHold ? "on_hold" : "pending",
     source: input.source,
     notes: input.notes ?? null,
+    proposed_times: null,
     whatsapp_confirmed: false,
     google_event_id: null,
     created_at: new Date().toISOString(),
@@ -304,7 +319,7 @@ export function saveAsConflict(
   );
   if (!contact) {
     contact = {
-      id: `ct-${Date.now()}`,
+      id: newId("ct"),
       organization_id: data.org.id,
       full_name: input.clientName.trim(),
       phone: input.clientPhone || null,
@@ -315,7 +330,7 @@ export function saveAsConflict(
     data.contacts = [...data.contacts, contact];
   }
   const appointment: Appointment = {
-    id: `apt-conflict-${Date.now()}`,
+    id: newId("apt-conflict"),
     organization_id: data.org.id,
     contact_id: contact.id,
     service_id: service.id,
@@ -328,6 +343,7 @@ export function saveAsConflict(
     status: "conflict",
     source: input.source,
     notes: `CONFLICTO: choca con ${contactName(data, conflictWith.contact_id)} ${fmtTime(conflictWith.start_time)}–${fmtTime(conflictWith.end_time)}.`,
+    proposed_times: null,
     whatsapp_confirmed: false,
     google_event_id: null,
     created_at: new Date().toISOString(),
@@ -355,8 +371,66 @@ export function isFirstVisit(data: StoreData, appt: Appointment): boolean {
       a.contact_id === appt.contact_id &&
       a.start_time < appt.start_time &&
       a.status !== "cancelled" &&
-      a.status !== "conflict"
+      a.status !== "conflict" &&
+      // Una cita en pausa no es una visita: solo pidió cita y está
+      // esperando a que la clínica la confirme.
+      a.status !== "on_hold"
   );
+}
+
+/**
+ * La clínica le propone horarios al paciente (cita en pausa).
+ * Guarda el texto tal cual en la cita, en palabras normales.
+ */
+export function proposeTimes(
+  data: StoreData,
+  id: string,
+  proposedTimes: string
+): StoreData {
+  const next: StoreData = {
+    ...data,
+    appointments: data.appointments.map((a) =>
+      a.id === id ? { ...a, proposed_times: proposedTimes.trim() || null } : a
+    ),
+  };
+  saveStore(next);
+  return next;
+}
+
+/**
+ * Confirma una cita que estaba en pausa (el paciente ya aceptó los
+ * horarios propuestos). Antes de confirmar vuelve a revisar que el
+ * horario siga libre para ese doctor: como la cita en pausa no
+ * bloqueaba, otro paciente pudo tomar ese hueco mientras tanto.
+ * Si ya está ocupado, NO se confirma y se devuelve con quién choca,
+ * para que la clínica proponga otro horario.
+ */
+export function confirmAppointment(
+  data: StoreData,
+  id: string
+): { ok: boolean; data: StoreData; conflictWith?: Appointment; error?: string } {
+  const appt = data.appointments.find((a) => a.id === id);
+  if (!appt) return { ok: false, data, error: "Cita no encontrada." };
+  if (appt.status !== "on_hold") {
+    return { ok: true, data: setStatus(data, id, "confirmed") };
+  }
+  const conflict = findConflict(
+    appt.start_time,
+    appt.duration_minutes,
+    data.appointments,
+    data.org.buffer_minutes,
+    appt.id,
+    appt.doctor_id
+  );
+  if (conflict) {
+    return {
+      ok: false,
+      data,
+      conflictWith: conflict,
+      error: `Ese horario ya lo tomó ${contactName(data, conflict.contact_id)}. Propón otro horario.`,
+    };
+  }
+  return { ok: true, data: setStatus(data, id, "confirmed") };
 }
 
 export function setStatus(

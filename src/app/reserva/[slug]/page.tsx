@@ -15,6 +15,7 @@ import {
 } from "@/lib/store";
 import { money, SPECIALTY_LABEL, type Appointment } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { DoctorChip } from "@/components/DoctorChip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -33,6 +34,7 @@ export default function ReservaPage({
   const [time, setTime] = useState("");
   const [conflict, setConflict] = useState<Appointment | null>(null);
   const [done, setDone] = useState(false);
+  const [doneOnHold, setDoneOnHold] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -95,6 +97,7 @@ export default function ReservaPage({
       doctorId: doctorId || null,
     });
     if (result.ok) {
+      setDoneOnHold(result.appointment?.status === "on_hold");
       setDone(true);
       return;
     }
@@ -132,17 +135,26 @@ export default function ReservaPage({
               </p>
               {doctor && (
                 <p className="mt-1 text-sm text-slate-600">
-                  <span
-                    className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
-                    style={{ backgroundColor: doctor.color }}
-                  />
-                  Con {doctor.name} · {SPECIALTY_LABEL[doctor.specialty]}
+                  Con <DoctorChip name={doctor.name} color={doctor.color} /> ·{" "}
+                  {SPECIALTY_LABEL[doctor.specialty]}
                 </p>
               )}
               <p className="mt-1 text-sm text-slate-500">
-                Quedó en <strong>pendiente</strong>. La clínica te confirmará
-                por teléfono. No hay confirmación automática por WhatsApp en
-                este MVP (Fase 2).
+                {doneOnHold ? (
+                  <>
+                    Tu cita quedó <strong>en pausa</strong>: este doctor solo
+                    atiende con cita y anticipo. La clínica revisará los
+                    horarios del doctor y te propondrá cuándo puede atenderte.
+                    Cuando aceptes, tu cita se confirma. Todavía no se cobra
+                    nada en línea.
+                  </>
+                ) : (
+                  <>
+                    Quedó en <strong>pendiente</strong>. La clínica te
+                    confirmará por teléfono. No hay confirmación automática
+                    por WhatsApp en este MVP (Fase 2).
+                  </>
+                )}
               </p>
               <Link href="/dashboard" className="mt-5 inline-block">
                 <Button variant="outline">Verla en la agenda (demo)</Button>
@@ -235,6 +247,14 @@ export default function ReservaPage({
                     <p className="mt-1 text-xs text-slate-500">
                       Solo se muestran los horarios en los que atiende{" "}
                       {doctor.name}.
+                      {doctor.requires_deposit && (
+                        <span className="mt-1 block rounded-lg bg-amber-50 p-2 font-medium text-amber-800">
+                          Este doctor solo atiende con cita y anticipo: tu
+                          cita quedará en pausa hasta que la clínica confirme
+                          los horarios y tú aceptes. No se bloquea el horario
+                          de inmediato.
+                        </span>
+                      )}
                     </p>
                   )}
                 </div>

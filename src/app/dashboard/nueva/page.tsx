@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { DoctorChip } from "@/components/DoctorChip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -206,11 +207,8 @@ export default function NuevaCitaPage() {
                     : { ok: true };
                   return (
                     <p className="mt-1 text-xs text-slate-500">
-                      <span
-                        className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
-                        style={{ backgroundColor: doc.color }}
-                      />
-                      {doc.name} · {SPECIALTY_LABEL[doc.specialty]} ·{" "}
+                      <DoctorChip name={doc.name} color={doc.color} /> ·{" "}
+                      {SPECIALTY_LABEL[doc.specialty]} ·{" "}
                       {day && day.active
                         ? `ese día atiende de ${day.start} a ${day.end}`
                         : "ese día no atiende"}
@@ -218,6 +216,14 @@ export default function NuevaCitaPage() {
                         <span className="font-medium text-red-700">
                           {" "}
                           — la cita a las {time} queda fuera de su horario.
+                        </span>
+                      )}
+                      {doc.requires_deposit && (
+                        <span className="mt-1 block rounded-lg bg-amber-50 p-2 font-medium text-amber-800">
+                          Este doctor solo atiende con cita y anticipo: la
+                          cita quedará en pausa hasta que la clínica confirme
+                          los horarios y el paciente acepte. No se bloquea el
+                          horario de inmediato.
                         </span>
                       )}
                     </p>

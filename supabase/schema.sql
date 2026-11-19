@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS doctors (
   specialty TEXT NOT NULL DEFAULT 'general'
     CHECK (specialty IN ('general', 'ortodoncia_general', 'endodoncista', 'endodoncista_general', 'ortopediatra')),
   color TEXT NOT NULL DEFAULT '#2563eb',
+  requires_deposit BOOLEAN NOT NULL DEFAULT false,
   schedule JSONB NOT NULL DEFAULT '[]'::jsonb,
   active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -137,10 +138,11 @@ CREATE TABLE IF NOT EXISTS appointments (
   duration_minutes INT NOT NULL DEFAULT 45,
   price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled', 'conflict')),
+    CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled', 'conflict', 'on_hold')),
   source TEXT NOT NULL DEFAULT 'vincimia_link'
     CHECK (source IN ('google_calendar', 'excel_promoter', 'vincimia_link', 'whatsapp_bot')),
   notes TEXT,
+  proposed_times TEXT,
   whatsapp_confirmed BOOLEAN NOT NULL DEFAULT false,
   google_event_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -241,12 +243,12 @@ INSERT INTO contacts (id, organization_id, full_name, phone) VALUES
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', '11111111-1111-1111-1111-111111111111', 'Mariana Torres', '+52 686 222 3344')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO doctors (id, organization_id, name, specialty, color, schedule) VALUES
-  ('a1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Dra. Ana López', 'general', '#2563eb', '[{"weekday":1,"start":"09:00","end":"18:00","active":true},{"weekday":2,"start":"09:00","end":"18:00","active":true},{"weekday":3,"start":"09:00","end":"18:00","active":true},{"weekday":4,"start":"09:00","end":"18:00","active":true},{"weekday":5,"start":"09:00","end":"18:00","active":true},{"weekday":6,"start":"09:00","end":"14:00","active":true}]'::jsonb),
-  ('a2222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Dr. Carlos Ruiz', 'ortodoncia_general', '#7c3aed', '[{"weekday":1,"start":"10:00","end":"19:00","active":true},{"weekday":2,"start":"10:00","end":"19:00","active":true},{"weekday":3,"start":"10:00","end":"19:00","active":true},{"weekday":4,"start":"10:00","end":"19:00","active":true},{"weekday":5,"start":"10:00","end":"19:00","active":true}]'::jsonb),
-  ('a3333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'Dra. María Torres', 'endodoncista', '#059669', '[{"weekday":1,"start":"09:00","end":"17:00","active":true},{"weekday":3,"start":"09:00","end":"17:00","active":true},{"weekday":5,"start":"09:00","end":"17:00","active":true}]'::jsonb),
-  ('a4444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'Dr. Jorge Sánchez', 'endodoncista_general', '#ea580c', '[{"weekday":2,"start":"09:00","end":"15:00","active":true},{"weekday":4,"start":"09:00","end":"15:00","active":true},{"weekday":6,"start":"09:00","end":"15:00","active":true}]'::jsonb),
-  ('a5555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', 'Dra. Lucía Fernández', 'ortopediatra', '#db2777', '[{"weekday":1,"start":"09:00","end":"15:00","active":true},{"weekday":2,"start":"09:00","end":"15:00","active":true},{"weekday":3,"start":"09:00","end":"15:00","active":true},{"weekday":4,"start":"09:00","end":"15:00","active":true},{"weekday":5,"start":"09:00","end":"15:00","active":true}]'::jsonb)
+INSERT INTO doctors (id, organization_id, name, specialty, color, requires_deposit, schedule) VALUES
+  ('a1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Dra. Ana López', 'general', '#2563eb', false, '[{"weekday":1,"start":"09:00","end":"18:00","active":true},{"weekday":2,"start":"09:00","end":"18:00","active":true},{"weekday":3,"start":"09:00","end":"18:00","active":true},{"weekday":4,"start":"09:00","end":"18:00","active":true},{"weekday":5,"start":"09:00","end":"18:00","active":true},{"weekday":6,"start":"09:00","end":"14:00","active":true}]'::jsonb),
+  ('a2222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Dr. Carlos Ruiz', 'ortodoncia_general', '#7c3aed', false, '[{"weekday":1,"start":"10:00","end":"19:00","active":true},{"weekday":2,"start":"10:00","end":"19:00","active":true},{"weekday":3,"start":"10:00","end":"19:00","active":true},{"weekday":4,"start":"10:00","end":"19:00","active":true},{"weekday":5,"start":"10:00","end":"19:00","active":true}]'::jsonb),
+  ('a3333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'Dra. María Torres', 'endodoncista', '#059669', true, '[{"weekday":1,"start":"09:00","end":"17:00","active":true},{"weekday":3,"start":"09:00","end":"17:00","active":true},{"weekday":5,"start":"09:00","end":"17:00","active":true}]'::jsonb),
+  ('a4444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'Dr. Jorge Sánchez', 'endodoncista_general', '#ea580c', false, '[{"weekday":2,"start":"09:00","end":"15:00","active":true},{"weekday":4,"start":"09:00","end":"15:00","active":true},{"weekday":6,"start":"09:00","end":"15:00","active":true}]'::jsonb),
+  ('a5555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', 'Dra. Lucía Fernández', 'ortopediatra', '#db2777', false, '[{"weekday":1,"start":"09:00","end":"15:00","active":true},{"weekday":2,"start":"09:00","end":"15:00","active":true},{"weekday":3,"start":"09:00","end":"15:00","active":true},{"weekday":4,"start":"09:00","end":"15:00","active":true},{"weekday":5,"start":"09:00","end":"15:00","active":true}]'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO appointments (id, organization_id, contact_id, service_id, promoter_id, doctor_id, start_time, end_time, duration_minutes, price, status, source, notes) VALUES

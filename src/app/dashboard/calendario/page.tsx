@@ -14,6 +14,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  confirmAppointment,
   contactName,
   contactPhone,
   doctorById,
@@ -22,10 +23,13 @@ import {
   isFirstVisit,
   loadStore,
   promoterName,
+  proposeTimes,
   serviceName,
   setStatus,
   type StoreData,
 } from "@/lib/store";
+import { DoctorChip } from "@/components/DoctorChip";
+import { confirmationMessage } from "@/lib/messages";
 import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
 import { CalendarCheck, CheckCircle2, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -131,6 +135,10 @@ export default function CalendarioPage() {
   const [view, setView] = useState<"semana" | "dia">("semana");
   const [anchor, setAnchor] = useState<Date>(() => new Date());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [proposal, setProposal] = useState("");
+  const [holdError, setHoldError] = useState("");
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setData(loadStore());
@@ -161,8 +169,49 @@ export default function CalendarioPage() {
       : `Semana del ${dayNum.format(days[0])} al ${dayNum.format(days[6])} de ${monthName.format(days[0])}`;
 
   const change = (id: string, status: StatusType) => {
-    setData(setStatus({ ...data }, id, status));
+    const next = setStatus({ ...data }, id, status);
+    setData(next);
     if (status === "cancelled") setSelectedId(null);
+    // Al confirmar se arma el mensaje para el paciente (con el aviso de
+    // llegar 15 minutos antes solo si es primera vez).
+    if (status === "confirmed") {
+      const appt = next.appointments.find((a) => a.id === id);
+      if (appt) {
+        setLastMessage(confirmationMessage(next, appt));
+        setCopied(false);
+      }
+    }
+  };
+
+  const copyMessage = async () => {
+    if (!lastMessage) return;
+    try {
+      await navigator.clipboard.writeText(lastMessage);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const saveProposal = (id: string) => {
+    if (!proposal.trim()) return;
+    setData(proposeTimes({ ...data }, id, proposal));
+    setHoldError("");
+  };
+
+  const confirmHold = (id: string) => {
+    const result = confirmAppointment({ ...data }, id);
+    setData(result.data);
+    if (!result.ok) {
+      setHoldError(result.error ?? "No se pudo confirmar la cita.");
+      return;
+    }
+    setHoldError("");
+    const appt = result.data.appointments.find((a) => a.id === id);
+    if (appt) {
+      setLastMessage(confirmationMessage(result.data, appt));
+      setCopied(false);
+    }
   };
 
   const counts = (Object.keys(SOURCE_COLOR) as SourceType[]).map((s) => ({
@@ -242,8 +291,7 @@ export default function CalendarioPage() {
             <span className="text-sm font-medium text-slate-600">Color por doctor:</span>
             {data.doctors.filter((d) => d.active).map((d) => (
               <span key={d.id} className="flex items-center gap-1.5 text-sm">
-                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.color }} />
-                {d.name} · {SPECIALTY_LABEL[d.specialty]}
+                <DoctorChip name={d.name} color={d.color} /> · {SPECIALTY_LABEL[d.specialty]}
                 <span className="text-slate-500">
                   ({visible.filter((a) => a.doctor_id === d.id).length})
                 </span>
@@ -279,6 +327,26 @@ export default function CalendarioPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Mensaje de confirmación para el paciente. */}
+      {lastMessage && (
+        <Card className="border-2 border-green-300 bg-green-50">
+          <CardHeader>
+            <CardTitle className="text-green-900">Mensaje para el paciente</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-green-900">{lastMessage}</p>
+            <p className="text-xs text-green-800">
+              Este es el texto que se le manda por WhatsApp. Si es primera
+              vez, ya trae la recomendación de llegar 15 minutos antes para
+              llenar su historial clínico.
+            </p>
+            <Button size="sm" variant="outline" onClick={copyMessage}>
+              {copied ? "Copiado ✓" : "Copiar mensaje"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Detalle de la cita seleccionada. */}
       {selected && (
@@ -316,11 +384,8 @@ export default function CalendarioPage() {
                 if (!doc) return "Sin asignar";
                 return (
                   <span>
-                    <span
-                      className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
-                      style={{ backgroundColor: doc.color }}
-                    />
-                    {doc.name} · {SPECIALTY_LABEL[doc.specialty]}
+                    <DoctorChip name={doc.name} color={doc.color} /> ·{" "}
+                    {SPECIALTY_LABEL[doc.specialty]}
                   </span>
                 );
               })()}
@@ -355,7 +420,44 @@ export default function CalendarioPage() {
                 <strong>Notas:</strong> {selected.notes}
               </p>
             )}
+            {selected.status === "on_hold" && (
+              <div className="rounded-lg bg-violet-50 p-3">
+                <p className="font-medium text-violet-900">
+                  En pausa — esperando a la clínica
+                </p>
+                <p className="text-violet-800">
+                  Este doctor solo atiende con cita y anticipo. La cita
+                  todavía no está confirmada ni bloquea el horario.
+                </p>
+                {selected.proposed_times && (
+                  <p className="mt-1 text-violet-900">
+                    <strong>Horarios propuestos:</strong> {selected.proposed_times}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <input
+                    value={proposal || selected.proposed_times || ""}
+                    onChange={(e) => setProposal(e.target.value)}
+                    placeholder="Ejemplo: Miércoles 10:00 o jueves 11:30"
+                    className="min-w-56 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => saveProposal(selected.id)}>
+                    Guardar propuesta
+                  </Button>
+                </div>
+                {holdError && (
+                  <p className="mt-2 rounded-lg bg-red-50 p-2 text-xs font-medium text-red-800">
+                    {holdError}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 pt-2">
+              {selected.status === "on_hold" && (
+                <Button size="sm" onClick={() => confirmHold(selected.id)}>
+                  Confirmar cita
+                </Button>
+              )}
               {selected.status === "pending" && (
                 <Button size="sm" onClick={() => change(selected.id, "confirmed")}>
                   Confirmar
@@ -366,7 +468,7 @@ export default function CalendarioPage() {
                   <CheckCircle2 className="h-4 w-4" /> Check-in
                 </Button>
               )}
-              {(selected.status === "pending" || selected.status === "confirmed") && (
+              {(selected.status === "pending" || selected.status === "confirmed" || selected.status === "on_hold") && (
                 <Button size="sm" variant="outline" onClick={() => change(selected.id, "cancelled")}>
                   <XCircle className="h-4 w-4" /> Cancelar
                 </Button>
@@ -470,7 +572,11 @@ export default function CalendarioPage() {
                       <button
                         key={appt.id}
                         type="button"
-                        onClick={() => setSelectedId(appt.id)}
+                        onClick={() => {
+                          setSelectedId(appt.id);
+                          setProposal(appt.proposed_times ?? "");
+                          setHoldError("");
+                        }}
                         className={cn(
                           "absolute overflow-hidden rounded-md border-l-4 px-1.5 py-1 text-left",
                           !doc && c.bg,
@@ -496,8 +602,15 @@ export default function CalendarioPage() {
                             <p className="truncate text-[11px] leading-tight">
                               {serviceName(data, appt.service_id)}
                             </p>
-                            <p className="truncate text-[11px] leading-tight opacity-80">
-                              {doc ? doctorName(data, appt.doctor_id) : c.label}
+                            <p className="truncate text-[11px] leading-tight">
+                              {doc ? (
+                                <DoctorChip
+                                  name={doctorName(data, appt.doctor_id)}
+                                  color={doc.color}
+                                />
+                              ) : (
+                                <span className="opacity-80">{c.label}</span>
+                              )}
                             </p>
                             <span
                               className={cn(

@@ -26,7 +26,7 @@ Pages + GitHub. El mismo stack del POS de EL RODEO.
 | **Agenda** (`/dashboard`) | Agenda unificada del día, con alerta de conflictos, Confirmar, Check-in (completed) y Cancelar. **Exige sesión** cuando Supabase está configurado; sin sesión redirige a `/login`. |
 | **Calendario** (`/dashboard/calendario`) | Vista tipo Google Calendar por semana y por día (8:00–20:00), con el color del **doctor** que atiende cada cita. La leyenda muestra cada doctor con su color y especialidad, y de dónde llegó la cita (Google Calendar azul, Promotor verde, Link público morado, WhatsApp turquesa). Cada cita marca si es la **primera vez** que viene el cliente o si **ya había venido**, calculado del historial del mismo contacto. Al pulsar una cita se ve el detalle y se puede confirmar, hacer check-in o cancelar. |
 | **Nueva cita** (`/dashboard/nueva`) | Crea cita validando el anti-empalme. Si choca, NO se guarda: muestra con quién choca y ofrece guardarla como `conflict`. Permite elegir el **doctor** (opcional): la cita debe caer dentro de su horario. |
-| **Doctores** (`/dashboard/doctores`) | Alta, edición y pausa de doctores. Cada uno con **nombre, especialidad** (Doctor general, Ortodoncia y general, Endodoncista, Endodoncista y general, Ortopediatra), **color** en el calendario (se puede cambiar cuando quieras) y **horarios** por día de la semana. Al **quitar** a un doctor no se borra: queda pausado, sus citas pasadas se conservan y ya no se le agendan citas nuevas; se puede volver a activar. Se guarda en localStorage y en Supabase (tabla `doctors`, migración `supabase/migrations/001_doctors.sql`). |
+| **Doctores** (`/dashboard/doctores`) | Alta, edición y pausa de doctores. Cada uno con **nombre, especialidad** (Doctor general, Ortodoncia y general, Endodoncista, Endodoncista y general, Ortopediatra), **color** en el calendario (se puede cambiar cuando quieras; el nombre del doctor se ve con el fondo de su color y letra que contraste, en Doctores, en la cita, en el calendario y en la leyenda) y **horarios** por día de la semana. Con la casilla **"Solo atiende con cita y anticipo"**, sus citas nacen **en pausa** (ver abajo). Al **quitar** a un doctor no se borra: queda pausado, sus citas pasadas se conservan y ya no se le agendan citas nuevas; se puede volver a activar. Se guarda en localStorage y en Supabase (tabla `doctors`, migración `supabase/migrations/001_doctors.sql`). |
 | **Promotores** (`/dashboard/promotores`) | Alta de promotores y liquidación: comisiones **solo sobre citas `completed`**, con `commission_rate` en %. |
 | **Servicios** (`/dashboard/servicios`) | Alta/baja de servicios; la duración es la que usa el anti-empalme. |
 | **Conectores** (`/dashboard/conectores`) | Estado real: Google Calendar **pendiente**, Sheets **listo**, WhatsApp **Fase 2**. |
@@ -58,6 +58,40 @@ la Agenda, Nueva cita, el link público y el webhook de Sheets.
 
 Ejemplo con los datos de prueba: Laura Méndez 10:00, 60 min (hasta 11:00)
 + 15 min de buffer = ocupada hasta las 11:15. Una cita a las 10:15 choca.
+
+### Doctores con anticipo: la cita queda en pausa
+
+Si un doctor tiene marcada la casilla **"Solo atiende con cita y
+anticipo"** (en Doctores; de ejemplo, la Dra. María Torres, endodoncista),
+sus citas nacen **en pausa** (`on_hold`), sin importar por dónde lleguen:
+en línea (reserva pública), por teléfono (Nueva cita) o por WhatsApp
+(Fase 2, mismo flujo cuando llegue). La cita en pausa **no se confirma ni
+bloquea el horario**: otra persona puede pedir ese mismo hueco.
+
+El flujo, en palabras normales, es:
+
+1. El paciente pide la cita y queda **en pausa**.
+2. La clínica revisa los horarios del doctor y le **propone horarios**
+   al paciente (campo "Horarios propuestos" en la Agenda o en el
+   Calendario, ej. "Miércoles 10:00 o jueves 11:30").
+3. Solo cuando el paciente acepta, la clínica pulsa **Confirmar cita**.
+   Antes de confirmar se vuelve a revisar que el horario siga libre
+   para ese doctor: si otro paciente lo tomó mientras tanto, no se
+   confirma y la clínica propone otro horario.
+
+Todavía **no hay cobro en línea**: solo el flujo de pausa y
+confirmación. La migración es `supabase/migrations/002_deposit_hold.sql`
+(columna `requires_deposit` en `doctors`, estado `on_hold` y columna
+`proposed_times` en `appointments`).
+
+### Mensaje de confirmación (con aviso para pacientes nuevos)
+
+Al confirmar una cita, en la Agenda y en el Calendario aparece el
+**mensaje para el paciente**, listo para copiar y mandar por WhatsApp
+(en la Fase 2 lo mandará el bot solo, con este mismo texto, ver
+`src/lib/messages.ts`). Si es la **primera vez** que viene el paciente,
+el mensaje agrega: *"Te recomendamos llegar 15 minutos antes para llenar
+tu historial clínico."* Si ya había venido, no lleva ese aviso.
 
 ## Piloto: las clínicas de Salvador (decisión 2026-11-18)
 

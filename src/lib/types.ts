@@ -12,7 +12,8 @@ export type StatusType =
   | "confirmed"
   | "completed"
   | "cancelled"
-  | "conflict";
+  | "conflict"
+  | "on_hold";
 
 export interface DoctorScheduleDay {
   /** Día de la semana: 0 = domingo, 1 = lunes, …, 6 = sábado. */
@@ -52,6 +53,10 @@ export interface Doctor {
   specialty: DoctorSpecialty;
   /** Color del doctor en el calendario, ej. "#2563eb". */
   color: string;
+  /** true = solo atiende con cita y anticipo: sus citas quedan en pausa
+   *  hasta que la clínica confirme los horarios y el paciente acepte.
+   *  Todavía no hay cobro en línea. */
+  requires_deposit: boolean;
   schedule: DoctorScheduleDay[];
   active: boolean;
   created_at: string;
@@ -131,6 +136,10 @@ export interface Appointment {
   status: StatusType;
   source: SourceType;
   notes: string | null;
+  /** Horarios que la clínica le propone al paciente cuando la cita está
+   *  en pausa (doctor con anticipo). Texto libre, ej. "Miércoles 10:00
+   *  o jueves 11:30". Solo se usa con citas en pausa. */
+  proposed_times: string | null;
   whatsapp_confirmed: boolean;
   google_event_id: string | null;
   created_at: string;
@@ -149,6 +158,7 @@ export const STATUS_LABEL: Record<StatusType, string> = {
   completed: "Completada",
   cancelled: "Cancelada",
   conflict: "Conflicto",
+  on_hold: "En pausa",
 };
 
 export function money(amount: number, currency = "MXN"): string {

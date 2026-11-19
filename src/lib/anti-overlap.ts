@@ -2,7 +2,9 @@
 // Una cita nueva (inicio + duración) choca con una existente si sus intervalos,
 // ampliados con el buffer configurable, se traslapan.
 // Solo bloquean las citas pending / confirmed / completed. Las citas en
-// conflict o cancelled NO bloquean (son registro, no ocupación real).
+// conflict o cancelled NO bloquean (son registro, no ocupación real), y
+// las citas en pausa (on_hold, doctor con anticipo) TAMPOCO bloquean:
+// quedan en espera hasta que la clínica las confirme.
 // La misma función la usan la Agenda, Nueva cita, el link público y el
 // webhook de Sheets, para que el criterio sea idéntico en las 3 fuentes.
 

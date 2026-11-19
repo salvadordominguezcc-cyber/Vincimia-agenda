@@ -5,13 +5,17 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DoctorChip } from "@/components/DoctorChip";
+import { confirmationMessage } from "@/lib/messages";
 import {
+  confirmAppointment,
   contactName,
   contactPhone,
   doctorById,
   doctorName,
   fmtTime,
   loadStore,
+  proposeTimes,
   resetDemo,
   serviceName,
   promoterName,
@@ -29,11 +33,16 @@ const STATUS_STYLE: Record<StatusType, string> = {
   completed: "bg-green-100 text-green-800",
   cancelled: "bg-slate-200 text-slate-600",
   conflict: "bg-red-100 text-red-800",
+  on_hold: "bg-violet-100 text-violet-800",
 };
 
 export default function AgendaPage() {
   const [data, setData] = useState<StoreData | null>(null);
   const [date, setDate] = useState(todayISO());
+  const [proposal, setProposal] = useState<Record<string, string>>({});
+  const [holdError, setHoldError] = useState("");
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setData(loadStore());
@@ -48,8 +57,51 @@ export default function AgendaPage() {
   const completedToday = day.filter((a) => a.status === "completed");
   const incomeCompleted = completedToday.reduce((s, a) => s + a.price, 0);
 
-  const change = (id: string, status: StatusType) =>
-    setData(setStatus({ ...data }, id, status));
+  const change = (id: string, status: StatusType) => {
+    const next = setStatus({ ...data }, id, status);
+    setData(next);
+    // Al confirmar se arma el mensaje para el paciente (con el aviso de
+    // llegar 15 minutos antes solo si es primera vez).
+    if (status === "confirmed") {
+      const appt = next.appointments.find((a) => a.id === id);
+      if (appt) {
+        setLastMessage(confirmationMessage(next, appt));
+        setCopied(false);
+      }
+    }
+  };
+
+  const saveProposal = (id: string) => {
+    const text = proposal[id] ?? "";
+    if (!text.trim()) return;
+    setData(proposeTimes({ ...data }, id, text));
+    setHoldError("");
+  };
+
+  const confirmHold = (id: string) => {
+    const result = confirmAppointment({ ...data }, id);
+    setData(result.data);
+    if (!result.ok) {
+      setHoldError(result.error ?? "No se pudo confirmar la cita.");
+      return;
+    }
+    setHoldError("");
+    const appt = result.data.appointments.find((a) => a.id === id);
+    if (appt) {
+      setLastMessage(confirmationMessage(result.data, appt));
+      setCopied(false);
+    }
+  };
+
+  const copyMessage = async () => {
+    if (!lastMessage) return;
+    try {
+      await navigator.clipboard.writeText(lastMessage);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -127,6 +179,27 @@ export default function AgendaPage() {
         </Card>
       </div>
 
+      {lastMessage && (
+        <Card className="border-2 border-green-300 bg-green-50">
+          <CardHeader>
+            <CardTitle className="text-green-900">
+              Mensaje para el paciente
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-green-900">{lastMessage}</p>
+            <p className="text-xs text-green-800">
+              Este es el texto que se le manda por WhatsApp. Si es primera
+              vez, ya trae la recomendación de llegar 15 minutos antes para
+              llenar su historial clínico.
+            </p>
+            <Button size="sm" variant="outline" onClick={copyMessage}>
+              {copied ? "Copiado ✓" : "Copiar mensaje"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {day.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-slate-500">
@@ -164,11 +237,11 @@ export default function AgendaPage() {
                     {a.doctor_id && (
                       <>
                         {" "}· Doctor:{" "}
-                        <span
-                          className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
-                          style={{ backgroundColor: doctorById(data, a.doctor_id)?.color ?? "#94a3b8" }}
-                        />
-                        {doctorName(data, a.doctor_id)} (
+                        <DoctorChip
+                          name={doctorName(data, a.doctor_id)}
+                          color={doctorById(data, a.doctor_id)?.color ?? "#94a3b8"}
+                        />{" "}
+                        (
                         {SPECIALTY_LABEL[doctorById(data, a.doctor_id)?.specialty ?? "general"]})
                       </>
                     )}
@@ -177,6 +250,42 @@ export default function AgendaPage() {
                     Origen: {SOURCE_LABEL[a.source]}
                     {a.notes ? ` · ${a.notes}` : ""}
                   </p>
+                  {a.status === "on_hold" && (
+                    <div className="mt-2 rounded-lg bg-violet-50 p-3 text-sm">
+                      <p className="font-medium text-violet-900">
+                        En pausa — esperando a la clínica
+                      </p>
+                      <p className="text-violet-800">
+                        Este doctor solo atiende con cita y anticipo. La cita
+                        todavía no está confirmada ni bloquea el horario.
+                        Propón horarios y, cuando el paciente acepte, confirma
+                        la cita.
+                      </p>
+                      {a.proposed_times && (
+                        <p className="mt-1 text-violet-900">
+                          <strong>Horarios propuestos:</strong> {a.proposed_times}
+                        </p>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Input
+                          value={proposal[a.id] ?? a.proposed_times ?? ""}
+                          onChange={(e) =>
+                            setProposal((prev) => ({ ...prev, [a.id]: e.target.value }))
+                          }
+                          placeholder="Ejemplo: Miércoles 10:00 o jueves 11:30"
+                          className="min-w-56 flex-1 bg-white"
+                        />
+                        <Button size="sm" variant="outline" onClick={() => saveProposal(a.id)}>
+                          Guardar propuesta
+                        </Button>
+                      </div>
+                      {holdError && (
+                        <p className="mt-2 rounded-lg bg-red-50 p-2 text-xs font-medium text-red-800">
+                          {holdError}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <span
                   className={cn(
@@ -192,12 +301,17 @@ export default function AgendaPage() {
                       Confirmar
                     </Button>
                   )}
+                  {a.status === "on_hold" && (
+                    <Button size="sm" onClick={() => confirmHold(a.id)}>
+                      Confirmar cita
+                    </Button>
+                  )}
                   {a.status === "confirmed" && (
                     <Button size="sm" onClick={() => change(a.id, "completed")}>
                       <CheckCircle2 className="h-4 w-4" /> Check-in
                     </Button>
                   )}
-                  {(a.status === "pending" || a.status === "confirmed") && (
+                  {(a.status === "pending" || a.status === "confirmed" || a.status === "on_hold") && (
                     <Button
                       size="sm"
                       variant="outline"
