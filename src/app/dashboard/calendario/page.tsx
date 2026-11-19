@@ -30,6 +30,8 @@ import {
 } from "@/lib/store";
 import { DoctorChip } from "@/components/DoctorChip";
 import { confirmationMessage } from "@/lib/messages";
+import { notifyAppointmentStatus } from "@/lib/notify-channels";
+import { supabaseConfigured } from "@/lib/supabase";
 import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
 import { CalendarCheck, CheckCircle2, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -172,6 +174,9 @@ export default function CalendarioPage() {
     const next = setStatus({ ...data }, id, status);
     setData(next);
     if (status === "cancelled") setSelectedId(null);
+    if (supabaseConfigured()) {
+      notifyAppointmentStatus(data.org.id, data.org.excel_webhook_secret, id, status);
+    }
     // Al confirmar se arma el mensaje para el paciente (con el aviso de
     // llegar 15 minutos antes solo si es primera vez).
     if (status === "confirmed") {
@@ -211,6 +216,9 @@ export default function CalendarioPage() {
     if (appt) {
       setLastMessage(confirmationMessage(result.data, appt));
       setCopied(false);
+      if (supabaseConfigured()) {
+        notifyAppointmentStatus(data.org.id, data.org.excel_webhook_secret, id, "confirmed");
+      }
     }
   };
 

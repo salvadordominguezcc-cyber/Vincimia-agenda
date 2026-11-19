@@ -29,7 +29,7 @@ Pages + GitHub. El mismo stack del POS de EL RODEO.
 | **Doctores** (`/dashboard/doctores`) | Alta, edición y pausa de doctores. Cada uno con **nombre, especialidad** (Doctor general, Ortodoncia y general, Endodoncista, Endodoncista y general, Ortopediatra), **color** en el calendario (se puede cambiar cuando quieras; el nombre del doctor se ve con el fondo de su color y letra que contraste, en Doctores, en la cita, en el calendario y en la leyenda) y **horarios** por día de la semana. Con la casilla **"Solo atiende con cita y anticipo"**, sus citas nacen **en pausa** (ver abajo). Al **quitar** a un doctor no se borra: queda pausado, sus citas pasadas se conservan y ya no se le agendan citas nuevas; se puede volver a activar. Se guarda en localStorage y en Supabase (tabla `doctors`, migración `supabase/migrations/001_doctors.sql`). |
 | **Promotores** (`/dashboard/promotores`) | Alta de promotores y liquidación: comisiones **solo sobre citas `completed`**, con `commission_rate` en %. |
 | **Servicios** (`/dashboard/servicios`) | Alta/baja de servicios; la duración es la que usa el anti-empalme. |
-| **Conectores** (`/dashboard/conectores`) | Estado real: Google Calendar **pendiente**, Sheets **listo**, WhatsApp **Fase 2**. |
+| **Conectores** (`/dashboard/conectores`) | Estado real: Google Calendar **conectado o pendiente** (con botón Conectar y Sincronizar ahora), Sheets **listo**, WhatsApp **activo o pendiente**. |
 | **Link público** (`/dashboard/link`) | Link `vincimia.link/slug`, copiar, y editor del buffer (5/10/15/30 min). |
 | **Ajustes** (`/dashboard/ajustes`) | Cambia los datos del negocio (nombre, enlace, tiempo entre citas, **tiempo de descanso** de la clínica, correo de Google Calendar) y borra los datos de ejemplo con doble confirmación. Guarda en localStorage y en Supabase (update en `organizations` + deletes en `appointments`/`contacts`/`services`/`promoters`); no borra la organización ni la cuenta. |
 | **Reserva pública** (`/reserva/[slug]`) | El cliente elige servicio, **doctor** (opcional) y fecha, y solo ve horarios libres dentro del horario de ese doctor. Crea la cita en `pending` y el contacto si no existe. |
@@ -97,10 +97,26 @@ descanso. La migración es `supabase/migrations/003_break.sql` (columnas
 
 Al confirmar una cita, en la Agenda y en el Calendario aparece el
 **mensaje para el paciente**, listo para copiar y mandar por WhatsApp
-(en la Fase 2 lo mandará el bot solo, con este mismo texto, ver
+(en la Fase 2 lo manda el bot solo, con este mismo texto, ver
 `src/lib/messages.ts`). Si es la **primera vez** que viene el paciente,
 el mensaje agrega: *"Te recomendamos llegar 15 minutos antes para llenar
 tu historial clínico."* Si ya había venido, no lleva ese aviso.
+
+## Fase 2 — Google Calendar y WhatsApp (conexiones reales)
+
+El código ya está; las cuentas se conectan siguiendo `FASE2_SETUP.md`.
+
+| Pieza | Qué hace |
+|---|---|
+| **Google Calendar** | OAuth con la cuenta secundaria (`prompt: select_account`, `access_type: offline`): el refresh_token se guarda en `organizations.google_refresh_token` y nunca sale de la base de datos. Rutas: `/api/google-calendar/auth`, `/api/google-calendar/callback`, `/api/google-calendar/sync`, `/api/google-calendar/disconnect`, `/api/google-calendar/status`. La sincronización es en dos vías: las citas de la nube sin evento suben a Google (al confirmar, mover o cancelar, y con "Sincronizar ahora"); los eventos escritos a mano en Google (próximos 30 días) bajan a la agenda pasando por el anti-empalme y el descanso (si chocan, quedan como conflicto). Sin credenciales (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) Conectores dice Pendiente. |
+| **WhatsApp** | API oficial de WhatsApp Cloud API (Meta). Rutas: `/api/webhook/whatsapp` (verificación con `WHATSAPP_VERIFY_TOKEN` y respuestas: Confirmo → confirmada, Cancelar → cancelada, otro texto → resumen de su cita), `/api/whatsapp/send` (manda la confirmación de una cita), `/api/whatsapp/status`, `/api/whatsapp/toggle` (interruptor por negocio) y `/api/appointments/status` (al confirmar en la Agenda, actualiza la cita en la nube, la sube a Google y manda la confirmación por WhatsApp). Usa el mismo texto de `src/lib/messages.ts` (aviso de 15 minutos solo si es primera vez). Con plantilla (`WHATSAPP_TEMPLATE_NAME`) llega siempre; con texto libre solo si el paciente escribió en las últimas 24 horas. Costo Meta: primeros 1,000 mensajes de servicio al mes gratis, luego ~$0.16 MXN por mensaje de utilidad en México. |
+| **Migración 004** | `supabase/migrations/004_fase2_whatsapp.sql`: columnas `whatsapp_phone_number_id`, `whatsapp_business_number` y `whatsapp_connected` en `organizations`. Google no necesita migración. |
+
+**Límite honesto:** la sincronización y el bot trabajan sobre las
+citas de la **nube** (Supabase). El panel todavía lee sus datos del
+aparato (localStorage): una cita creada solo en el aparato no se sube
+a Google ni se manda por WhatsApp hasta la migración del panel a
+Supabase (siguiente paso, no parte de esta fase).
 
 ## Piloto: las clínicas de Salvador (decisión 2026-11-18)
 

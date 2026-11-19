@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DoctorChip } from "@/components/DoctorChip";
 import { confirmationMessage } from "@/lib/messages";
+import { notifyAppointmentStatus } from "@/lib/notify-channels";
+import { supabaseConfigured } from "@/lib/supabase";
 import {
   confirmAppointment,
   contactName,
@@ -60,6 +62,12 @@ export default function AgendaPage() {
   const change = (id: string, status: StatusType) => {
     const next = setStatus({ ...data }, id, status);
     setData(next);
+    // Si la cita existe en la nube, avisar a Google Calendar y a
+    // WhatsApp (la ruta dice por canal qué hizo; si no existe en la
+    // nube, no pasa nada y el mensaje para copiar sigue ahí).
+    if (supabaseConfigured()) {
+      notifyAppointmentStatus(data.org.id, data.org.excel_webhook_secret, id, status);
+    }
     // Al confirmar se arma el mensaje para el paciente (con el aviso de
     // llegar 15 minutos antes solo si es primera vez).
     if (status === "confirmed") {
@@ -90,6 +98,9 @@ export default function AgendaPage() {
     if (appt) {
       setLastMessage(confirmationMessage(result.data, appt));
       setCopied(false);
+      if (supabaseConfigured()) {
+        notifyAppointmentStatus(data.org.id, data.org.excel_webhook_secret, id, "confirmed");
+      }
     }
   };
 

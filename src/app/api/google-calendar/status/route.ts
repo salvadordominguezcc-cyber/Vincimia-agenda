@@ -5,6 +5,7 @@
 
 export const runtime = "edge";
 
+import { googleConfigured } from "@/lib/google";
 import { supabaseServer } from "@/lib/supabase";
 
 export async function GET(req: Request) {
@@ -15,10 +16,12 @@ export async function GET(req: Request) {
     return Response.json({
       connected: false,
       status: "pending",
+      configured: googleConfigured(),
       connected_google_email: null,
       last_calendar_sync: null,
-      message:
-        "Google Calendar no conectado. Falta el OAuth con select_account y el refresh_token (ver /dashboard/conectores).",
+      message: googleConfigured()
+        ? "Google Calendar no conectado. Falta el OAuth con select_account y el refresh_token (ver /dashboard/conectores)."
+        : "Faltan las credenciales de Google (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) en Cloudflare (ver FASE2_SETUP.md).",
     });
   }
   const { data: org } = await supabase
@@ -29,10 +32,13 @@ export async function GET(req: Request) {
   return Response.json({
     connected: Boolean(org?.google_calendar_sync),
     status: org?.google_calendar_sync ? "connected" : "pending",
+    configured: googleConfigured(),
     connected_google_email: org?.connected_google_email ?? null,
     last_calendar_sync: org?.last_calendar_sync ?? null,
     message: org?.google_calendar_sync
       ? "Sincronización activa."
-      : "Google Calendar no conectado.",
+      : googleConfigured()
+        ? "Google Calendar no conectado."
+        : "Faltan las credenciales de Google en Cloudflare (ver FASE2_SETUP.md).",
   });
 }
