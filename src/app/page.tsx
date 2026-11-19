@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle,
@@ -49,9 +50,7 @@ export default function Home() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
-              V
-            </span>
+            <Logo />
             Vincimia Agenda
           </Link>
           <nav className="flex items-center gap-2">
@@ -67,6 +66,9 @@ export default function Home() {
 
       <main className="mx-auto max-w-6xl px-4">
         <section className="py-16 text-center sm:py-24">
+          <div className="mb-5 flex justify-center">
+            <Logo className="h-20 w-20 shadow-md" />
+          </div>
           <p className="mb-3 inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
             MVP · Agenda inteligente · Sin citas empalmadas
           </p>

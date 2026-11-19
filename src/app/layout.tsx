@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "Vincimia Agenda: agenda unificada multi-negocio con motor anti-empalmes, link público de reserva y promotores por Google Sheets. Sin citas empalmadas.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  icons: { icon: "/logo.svg", shortcut: "/favicon.svg", apple: "/logo.svg" },
 };
 
 export const viewport: Viewport = { themeColor: "#4338ca" };

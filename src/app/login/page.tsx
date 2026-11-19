@@ -15,6 +15,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { Logo } from "@/components/Logo";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -281,9 +282,7 @@ export default function LoginPage() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-2xl items-center gap-2 px-4 py-4">
           <Link href="/" className="flex items-center gap-2 font-bold">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
-              V
-            </span>
+            <Logo />
             Vincimia Agenda
           </Link>
         </div>

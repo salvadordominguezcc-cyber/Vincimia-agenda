@@ -17,6 +17,7 @@ import { ensureMembership } from "@/lib/auth";
 import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
 import { loadStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -101,9 +102,7 @@ export default function DashboardLayout({
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 pt-4">
           <Link href="/" className="flex items-center gap-2 font-bold">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm text-white">
-              V
-            </span>
+            <Logo className="h-8 w-8" />
             Vincimia Agenda
           </Link>
           {demo ? (

@@ -16,6 +16,7 @@ import {
 import { money, SPECIALTY_LABEL, type Appointment } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { DoctorChip } from "@/components/DoctorChip";
+import { Logo } from "@/components/Logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -113,9 +114,7 @@ export default function ReservaPage({
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-2xl items-center gap-2 px-4 py-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 font-bold text-white">
-            V
-          </span>
+          <Logo />
           <div>
             <p className="font-bold leading-tight">Vincimia Agenda</p>
             <p className="text-xs text-slate-500">Reserva en línea</p>
