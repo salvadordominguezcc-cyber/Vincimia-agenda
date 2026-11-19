@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS organizations (
   name TEXT NOT NULL,
   slug TEXT UNIQUE NOT NULL,
   buffer_minutes INT NOT NULL DEFAULT 15,
+  break_start TEXT,
+  break_end TEXT,
   whatsapp_bot_enabled BOOLEAN NOT NULL DEFAULT false,
   -- Conexión a cuenta de Google Calendar secundaria/externa (Fase 1 completa).
   -- En el MVP quedan en false / NULL: NO hay token guardado ni conexión real.
@@ -219,8 +221,8 @@ CREATE POLICY "appointments_members" ON appointments FOR ALL
 -- Para volver a sembrar otro día, borra las citas de ejemplo y vuelve a
 -- correr solo esta sección.
 -- ---------------------------------------------------------------------------
-INSERT INTO organizations (id, name, slug, buffer_minutes, whatsapp_bot_enabled, google_calendar_sync)
-VALUES ('11111111-1111-1111-1111-111111111111', 'Clínica Dental Sonrisa', 'clinica-sonrisa', 15, false, false)
+INSERT INTO organizations (id, name, slug, buffer_minutes, break_start, break_end, whatsapp_bot_enabled, google_calendar_sync)
+VALUES ('11111111-1111-1111-1111-111111111111', 'Clínica Dental Sonrisa', 'clinica-sonrisa', 15, '14:00', '15:00', false, false)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO services (id, organization_id, name, duration_minutes, price, follow_up_days) VALUES

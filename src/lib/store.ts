@@ -5,7 +5,7 @@
 // la etiqueta "Modo demo" está visible en todo el panel.
 "use client";
 
-import { findConflict } from "./anti-overlap";
+import { findConflict, overlapsBreak } from "./anti-overlap";
 import {
   DEMO_APPOINTMENTS,
   DEMO_CONTACTS,
@@ -73,8 +73,13 @@ export function loadStore(): StoreData {
       return s;
     }
     const parsed = JSON.parse(raw) as StoreData;
-    // Migración suave: los almacenes viejos no tenían doctores.
+    // Migración suave: los almacenes viejos no tenían doctores ni
+    // tiempo de descanso. Sin descanso guardado, no hay descanso.
     if (!parsed.doctors) parsed.doctors = DEMO_DOCTORS;
+    if (parsed.org && parsed.org.break_start === undefined) {
+      parsed.org.break_start = null;
+      parsed.org.break_end = null;
+    }
     if (!parsed.appointments) parsed.appointments = [];
     // Cada día se regeneran las citas de ejemplo para que la Agenda
     // de hoy siempre tenga datos con los que probar el anti-empalme.
@@ -232,6 +237,20 @@ export function createAppointment(
         error: `${doctor.name} no atiende ${works.reason ?? "a esa hora"}. Elige otro horario o a otro doctor.`,
       };
     }
+  }
+  // Tiempo de descanso de la clínica: en esa hora no hay citas.
+  if (
+    overlapsBreak(
+      `${input.date}T${input.time}:00`,
+      service.duration_minutes,
+      data.org.break_start,
+      data.org.break_end
+    )
+  ) {
+    return {
+      ok: false,
+      error: `Ese horario choca con el tiempo de descanso de la clínica (${data.org.break_start}–${data.org.break_end}). Elige otro horario.`,
+    };
   }
   const startISO = `${input.date}T${input.time}:00`;
   const start = new Date(startISO);

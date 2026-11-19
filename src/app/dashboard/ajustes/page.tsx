@@ -30,6 +30,8 @@ export default function AjustesPage() {
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
   const [gap, setGap] = useState("15");
+  const [breakStart, setBreakStart] = useState("");
+  const [breakEnd, setBreakEnd] = useState("");
   const [googleEmail, setGoogleEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -44,6 +46,8 @@ export default function AjustesPage() {
     setName(d.org.name);
     setLink(d.org.slug);
     setGap(String(d.org.buffer_minutes));
+    setBreakStart(d.org.break_start ?? "");
+    setBreakEnd(d.org.break_end ?? "");
     setGoogleEmail(d.org.connected_google_email ?? "");
   }, []);
 
@@ -82,6 +86,18 @@ export default function AjustesPage() {
       setError("Ese correo de Google Calendar no se ve válido. Revísalo.");
       return;
     }
+    // Tiempo de descanso: si se pone uno, hay que poner los dos y que
+    // la salida sea después de la entrada. Vacío = sin descanso.
+    const cleanBreakStart = breakStart.trim();
+    const cleanBreakEnd = breakEnd.trim();
+    if ((cleanBreakStart && !cleanBreakEnd) || (!cleanBreakStart && cleanBreakEnd)) {
+      setError("Para el tiempo de descanso pon la hora de inicio y la de fin, o deja las dos vacías.");
+      return;
+    }
+    if (cleanBreakStart && cleanBreakEnd && cleanBreakEnd <= cleanBreakStart) {
+      setError("En el tiempo de descanso, la hora de fin debe ser después de la de inicio.");
+      return;
+    }
 
     // 1) Se guarda aquí mismo para que se vea de inmediato.
     const next: StoreData = {
@@ -91,6 +107,8 @@ export default function AjustesPage() {
         name: cleanName,
         slug: cleanLink,
         buffer_minutes: gapMinutes,
+        break_start: cleanBreakStart || null,
+        break_end: cleanBreakEnd || null,
         connected_google_email: cleanEmail || null,
       },
     };
@@ -116,6 +134,8 @@ export default function AjustesPage() {
           name: cleanName,
           slug: cleanLink,
           buffer_minutes: gapMinutes,
+          break_start: cleanBreakStart || null,
+          break_end: cleanBreakEnd || null,
           connected_google_email: cleanEmail || null,
         })
         .eq("id", data.org.id);
@@ -297,6 +317,43 @@ export default function AjustesPage() {
               </div>
               <p className="mt-1 text-xs text-slate-500">
                 Minutos libres entre una cita y otra, para que no se empalmen.
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">
+                Tiempo de descanso
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="time"
+                  value={breakStart}
+                  onChange={(e) => setBreakStart(e.target.value)}
+                  className="w-32"
+                />
+                <span className="text-sm text-slate-600">a</span>
+                <Input
+                  type="time"
+                  value={breakEnd}
+                  onChange={(e) => setBreakEnd(e.target.value)}
+                  className="w-32"
+                />
+                {(breakStart || breakEnd) && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setBreakStart("");
+                      setBreakEnd("");
+                    }}
+                  >
+                    Quitar descanso
+                  </Button>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                La hora de comida de la clínica. En ese tiempo no se muestran
+                ni se permiten citas. Déjalo vacío si no hay descanso.
               </p>
             </div>
             <div>

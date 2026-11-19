@@ -248,6 +248,12 @@ export default function NuevaCitaPage() {
                   onChange={(e) => setTime(e.target.value)}
                   required
                 />
+                {data.org.break_start && data.org.break_end && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Tiempo de descanso de {data.org.break_start} a{" "}
+                    {data.org.break_end}: en esa hora no hay citas.
+                  </p>
+                )}
               </div>
             </div>
             <div>

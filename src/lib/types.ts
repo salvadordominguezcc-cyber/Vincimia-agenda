@@ -79,6 +79,10 @@ export interface Organization {
   name: string;
   slug: string;
   buffer_minutes: number;
+  /** Tiempo de descanso de la clínica, ej. "14:00"–"15:00". null = sin
+   *  descanso. En esa hora no se muestran ni se permiten citas. */
+  break_start: string | null;
+  break_end: string | null;
   whatsapp_bot_enabled: boolean;
   google_calendar_sync: boolean;
   connected_google_email: string | null;

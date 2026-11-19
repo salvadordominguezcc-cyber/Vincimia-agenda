@@ -43,6 +43,8 @@ export const DEMO_ORG: Organization = {
   name: "Clínica Dental Sonrisa",
   slug: "clinica-sonrisa",
   buffer_minutes: 15,
+  break_start: "14:00",
+  break_end: "15:00",
   whatsapp_bot_enabled: false,
   google_calendar_sync: false,
   connected_google_email: null,

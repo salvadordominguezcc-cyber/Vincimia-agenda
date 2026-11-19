@@ -71,7 +71,7 @@ export async function POST(req: Request) {
   // 1) Organización + secreto del webhook.
   const { data: org, error: orgError } = await supabase
     .from("organizations")
-    .select("id, buffer_minutes")
+    .select("id, buffer_minutes, break_start, break_end")
     .eq("id", organizationId)
     .eq("excel_webhook_secret", secret)
     .single();
@@ -82,6 +82,10 @@ export async function POST(req: Request) {
     );
   }
   const buffer = org.buffer_minutes ?? 15;
+
+  // 1b) Tiempo de descanso de la clínica: en esa hora no hay citas.
+  // (Se revisa después de conocer la duración del servicio, en el paso 4.)
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 
   // 2) Servicio (por nombre; si no existe, usa la duración por defecto 45).
   const { data: service } = await supabase
@@ -129,6 +133,13 @@ export async function POST(req: Request) {
   const clash = (existing ?? []).find((a) =>
     overlaps(start, end, new Date(a.start_time), new Date(a.end_time), buffer)
   );
+  // El tiempo de descanso también bloquea: se registra como conflicto.
+  const reqStartMin = start.getHours() * 60 + start.getMinutes();
+  const inBreak =
+    !!org.break_start &&
+    !!org.break_end &&
+    reqStartMin < toMin(org.break_end) &&
+    toMin(org.break_start) < reqStartMin + duration;
 
   // 5) Contacto: se crea si no existe (por teléfono o nombre).
   let contactId: string | null = null;
@@ -154,8 +165,9 @@ export async function POST(req: Request) {
     contactId = created?.id ?? null;
   }
 
-  // 6) Si choca: se guarda como conflict (registro, sin bloquear ni comisionar).
-  if (clash) {
+  // 6) Si choca (o cae en el tiempo de descanso): se guarda como
+  // conflict (registro, sin bloquear ni comisionar).
+  if (clash || inBreak) {
     const { data: saved } = await supabase
       .from("appointments")
       .insert({
@@ -169,7 +181,9 @@ export async function POST(req: Request) {
         price,
         status: "conflict",
         source: "excel_promoter",
-        notes: `CONFLICTO (Sheets): choca con la cita ${clash.id} ${clash.start_time}–${clash.end_time}.`,
+        notes: inBreak
+          ? `CONFLICTO (Sheets): cae en el tiempo de descanso de la clínica (${org.break_start}–${org.break_end}).`
+          : `CONFLICTO (Sheets): choca con la cita ${clash!.id} ${clash!.start_time}–${clash!.end_time}.`,
       })
       .select("id")
       .single();
@@ -177,7 +191,9 @@ export async function POST(req: Request) {
       success: false,
       status: "conflict",
       appointment_id: saved?.id ?? null,
-      message: `Horario ocupado (${startTime}). La cita quedó registrada como conflicto.`,
+      message: inBreak
+        ? `Ese horario cae en el tiempo de descanso (${org.break_start}–${org.break_end}). La cita quedó registrada como conflicto.`
+        : `Horario ocupado (${startTime}). La cita quedó registrada como conflicto.`,
     });
   }
 

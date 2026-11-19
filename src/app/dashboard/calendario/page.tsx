@@ -550,6 +550,24 @@ export default function CalendarioPage() {
                       style={{ height: HOUR_PX }}
                     />
                   ))}
+                  {/* Tiempo de descanso de la clínica: banda sombreada. */}
+                  {data.org.break_start && data.org.break_end && (() => {
+                    const bs = minutesOf(`2000-01-01T${data.org.break_start}:00`);
+                    const be = minutesOf(`2000-01-01T${data.org.break_end}:00`);
+                    if (be <= FIRST_HOUR * 60 || bs >= LAST_HOUR * 60) return null;
+                    const top = Math.max(0, ((bs - FIRST_HOUR * 60) / 60) * HOUR_PX);
+                    const height = Math.max(22, ((be - bs) / 60) * HOUR_PX - 2);
+                    return (
+                      <div
+                        className="absolute left-0 right-0 border-y border-slate-300 bg-slate-200/80 px-2 py-1"
+                        style={{ top, height }}
+                      >
+                        <p className="text-[11px] font-medium text-slate-600">
+                          Tiempo de descanso {data.org.break_start}–{data.org.break_end}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   {placed.map(({ appt, col, cols }) => {
                     const c = SOURCE_COLOR[appt.source];
                     const doc = doctorById(data, appt.doctor_id);

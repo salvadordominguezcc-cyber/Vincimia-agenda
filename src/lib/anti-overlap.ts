@@ -67,21 +67,41 @@ export function findConflict(
   return null;
 }
 
+/** ¿La cita (inicio + duración) choca con el tiempo de descanso de la
+ *  clínica? El descanso es el mismo todos los días. */
+export function overlapsBreak(
+  startISO: string,
+  durationMinutes: number,
+  breakStart: string | null,
+  breakEnd: string | null
+): boolean {
+  if (!breakStart || !breakEnd) return false;
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const start = toMin(startISO.slice(11, 16));
+  const end = start + durationMinutes;
+  return start < toMin(breakEnd) && toMin(breakStart) < end;
+}
+
 /** Horas de inicio libres para un día, cada 30 min entre 09:00 y 14:00.
  *  Si se pasa un horario de doctor, solo se ofrecen horas dentro de su
- *  horario de ese día (y hasta las 20:00 como máximo). */
+ *  horario de ese día (y hasta las 20:00 como máximo). En ningún caso se
+ *  ofrecen horas que choquen con el tiempo de descanso de la clínica. */
 export function freeSlots(
   dateISO: string,
   durationMinutes: number,
   existing: Appointment[],
   bufferMinutes: number,
   doctorSchedule?: { weekday: number; start: string; end: string; active: boolean }[] | null,
-  doctorId?: string | null
+  doctorId?: string | null,
+  breakWindow?: { start: string | null; end: string | null } | null
 ): string[] {
   const slots: string[] = [];
   const weekday = new Date(`${dateISO}T12:00:00`).getDay();
   let fromH = 9;
   let toH = 14;
+  const blockedByBreak = (hhmm: string) =>
+    !!breakWindow &&
+    overlapsBreak(`${dateISO}T${hhmm}:00`, durationMinutes, breakWindow.start, breakWindow.end);
   if (doctorSchedule) {
     const day = doctorSchedule.find((d) => d.weekday === weekday && d.active);
     if (!day) return [];
@@ -100,6 +120,7 @@ export function freeSlots(
         const hh = String(h).padStart(2, "0");
         const mm = String(m).padStart(2, "0");
         const startISO = `${dateISO}T${hh}:${mm}:00`;
+        if (blockedByBreak(`${hh}:${mm}`)) continue;
         if (
           !findConflict(startISO, durationMinutes, existing, bufferMinutes, undefined, doctorId)
         ) {
@@ -115,6 +136,7 @@ export function freeSlots(
       const hh = String(h).padStart(2, "0");
       const mm = String(m).padStart(2, "0");
       const startISO = `${dateISO}T${hh}:${mm}:00`;
+      if (blockedByBreak(`${hh}:${mm}`)) continue;
       if (
         !findConflict(startISO, durationMinutes, existing, bufferMinutes, undefined, doctorId)
       ) {

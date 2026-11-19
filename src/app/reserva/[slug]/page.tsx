@@ -74,7 +74,8 @@ export default function ReservaPage({
         data.appointments,
         data.org.buffer_minutes,
         doctor ? doctor.schedule : null,
-        doctor ? doctor.id : null
+        doctor ? doctor.id : null,
+        { start: data.org.break_start, end: data.org.break_end }
       )
     : [];
 
@@ -169,6 +170,12 @@ export default function ReservaPage({
                 Solo se muestran horarios libres: el motor anti-empalmes ya
                 quitó los ocupados y el buffer de {data.org.buffer_minutes}{" "}
                 min.
+                {data.org.break_start && data.org.break_end && (
+                  <>
+                    {" "}Tiempo de descanso de {data.org.break_start} a{" "}
+                    {data.org.break_end}: en esa hora no hay citas.
+                  </>
+                )}
               </p>
             </CardHeader>
             <CardContent>
