@@ -36,13 +36,20 @@ export function findConflict(
   durationMinutes: number,
   existing: Appointment[],
   bufferMinutes: number,
-  excludeId?: string
+  excludeId?: string,
+  doctorId?: string | null
 ): Appointment | null {
   const start = new Date(startISO);
   const end = new Date(start.getTime() + durationMinutes * 60_000);
   for (const appt of existing) {
     if (excludeId && appt.id === excludeId) continue;
     if (!BLOCKING_STATUSES.includes(appt.status)) continue;
+    // Agendas paralelas: una cita solo empalma con las del mismo doctor.
+    // Una cita sin doctor asignado ocupa la agenda general y empalma con
+    // todas; una cita con doctor no choca con la de otro doctor.
+    if (doctorId) {
+      if (appt.doctor_id && appt.doctor_id !== doctorId) continue;
+    }
     if (
       intervalsOverlap(
         start,
@@ -58,21 +65,57 @@ export function findConflict(
   return null;
 }
 
-/** Horas de inicio libres para un día, cada 30 min entre 09:00 y 14:00. */
+/** Horas de inicio libres para un día, cada 30 min entre 09:00 y 14:00.
+ *  Si se pasa un horario de doctor, solo se ofrecen horas dentro de su
+ *  horario de ese día (y hasta las 20:00 como máximo). */
 export function freeSlots(
   dateISO: string,
   durationMinutes: number,
   existing: Appointment[],
-  bufferMinutes: number
+  bufferMinutes: number,
+  doctorSchedule?: { weekday: number; start: string; end: string; active: boolean }[] | null,
+  doctorId?: string | null
 ): string[] {
   const slots: string[] = [];
-  for (let h = 9; h <= 14; h++) {
+  const weekday = new Date(`${dateISO}T12:00:00`).getDay();
+  let fromH = 9;
+  let toH = 14;
+  if (doctorSchedule) {
+    const day = doctorSchedule.find((d) => d.weekday === weekday && d.active);
+    if (!day) return [];
+    fromH = Number(day.start.slice(0, 2));
+    toH = Math.min(20, Number(day.end.slice(0, 2)));
+    // Si el horario termina a las :30, permitir la última media hora.
+    const endMin = Number(day.end.slice(3, 5));
+    for (let h = fromH; h <= toH; h++) {
+      for (const m of [0, 30]) {
+        if (h === toH && m > endMin - durationMinutes && endMin !== 0) {
+          // La cita debe terminar antes de que cierre el horario.
+          if (h * 60 + m + durationMinutes > toH * 60 + endMin) continue;
+        }
+        if (h === toH && endMin === 0 && m === 30) continue;
+        if (h * 60 + m + durationMinutes > toH * 60 + endMin) continue;
+        const hh = String(h).padStart(2, "0");
+        const mm = String(m).padStart(2, "0");
+        const startISO = `${dateISO}T${hh}:${mm}:00`;
+        if (
+          !findConflict(startISO, durationMinutes, existing, bufferMinutes, undefined, doctorId)
+        ) {
+          slots.push(`${hh}:${mm}`);
+        }
+      }
+    }
+    return slots;
+  }
+  for (let h = fromH; h <= toH; h++) {
     for (const m of [0, 30]) {
       if (h === 14 && m === 30) continue;
       const hh = String(h).padStart(2, "0");
       const mm = String(m).padStart(2, "0");
       const startISO = `${dateISO}T${hh}:${mm}:00`;
-      if (!findConflict(startISO, durationMinutes, existing, bufferMinutes)) {
+      if (
+        !findConflict(startISO, durationMinutes, existing, bufferMinutes, undefined, doctorId)
+      ) {
         slots.push(`${hh}:${mm}`);
       }
     }

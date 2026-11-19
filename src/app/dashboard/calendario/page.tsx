@@ -1,7 +1,8 @@
 // Calendario tipo Google Calendar — vista por semana y por día.
-// El color de cada bloque es el origen de la cita (de dónde llegó):
-// Google Calendar azul, Promotor verde, Link público morado, WhatsApp
-// turquesa. También se marca si es la primera vez que viene el cliente
+// El color de cada bloque es el del doctor que atiende la cita (cada
+// doctor tiene su color en Doctores); de dónde llegó la cita se ve en
+// el detalle y en la leyenda de origen. También se marca si es la
+// primera vez que viene el cliente
 // o si ya había venido, calculado del historial del mismo contacto
 // (ver isFirstVisit en src/lib/store.ts). No se cambia la lógica de
 // anti-empalme: los huecos ocupados ya se ven como bloques, y el tiempo
@@ -15,6 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   contactName,
   contactPhone,
+  doctorById,
+  doctorName,
   fmtTime,
   isFirstVisit,
   loadStore,
@@ -23,7 +26,7 @@ import {
   setStatus,
   type StoreData,
 } from "@/lib/store";
-import { SOURCE_LABEL, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
+import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
 import { CalendarCheck, CheckCircle2, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -175,8 +178,9 @@ export default function CalendarioPage() {
         <div>
           <h1 className="text-2xl font-bold">Calendario — {data.org.name}</h1>
           <p className="text-sm text-slate-500">
-            Como Google Calendar: cada cita tiene el color de donde llegó.
-            Los huecos entre citas ya incluyen el tiempo libre de Ajustes.
+            Como Google Calendar: cada cita tiene el color de su doctor.
+            De dónde llegó se ve en el detalle. Los huecos entre citas ya
+            incluyen el tiempo libre de Ajustes.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -231,17 +235,39 @@ export default function CalendarioPage() {
 
       <p className="text-lg font-semibold capitalize">{title}</p>
 
-      {/* Leyenda: color por origen, con palabras normales. */}
+      {/* Leyenda: color por doctor y, abajo, de dónde llegó cada cita. */}
       <Card>
-        <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-2 py-3">
-          <span className="text-sm font-medium text-slate-600">Color por origen:</span>
-          {counts.map(({ source, count }) => (
-            <span key={source} className="flex items-center gap-1.5 text-sm">
-              <span className={cn("h-3 w-3 rounded-full", SOURCE_COLOR[source].dot)} />
-              {SOURCE_COLOR[source].label}
-              <span className="text-slate-500">({count})</span>
-            </span>
-          ))}
+        <CardContent className="space-y-2 py-3">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="text-sm font-medium text-slate-600">Color por doctor:</span>
+            {data.doctors.filter((d) => d.active).map((d) => (
+              <span key={d.id} className="flex items-center gap-1.5 text-sm">
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: d.color }} />
+                {d.name} · {SPECIALTY_LABEL[d.specialty]}
+                <span className="text-slate-500">
+                  ({visible.filter((a) => a.doctor_id === d.id).length})
+                </span>
+              </span>
+            ))}
+            {visible.filter((a) => !a.doctor_id).length > 0 && (
+              <span className="flex items-center gap-1.5 text-sm">
+                <span className="h-3 w-3 rounded-full bg-slate-400" />
+                Sin asignar
+                <span className="text-slate-500">
+                  ({visible.filter((a) => !a.doctor_id).length})
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="text-sm font-medium text-slate-600">Llegó por:</span>
+            {counts.map(({ source, count }) => (
+              <span key={source} className="flex items-center gap-1.5 text-sm">
+                <span className={cn("h-3 w-3 rounded-full", SOURCE_COLOR[source].dot)} />
+                {SOURCE_COLOR[source].label}
+                <span className="text-slate-500">({count})</span>
+              </span>
+            ))}
           <span className="ml-auto flex items-center gap-3 text-xs text-slate-500">
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">
               Primera vez
@@ -250,6 +276,7 @@ export default function CalendarioPage() {
               Ya había venido
             </span>
           </span>
+          </div>
         </CardContent>
       </Card>
 
@@ -281,6 +308,22 @@ export default function CalendarioPage() {
             <p>
               <strong>Servicio:</strong> {serviceName(data, selected.service_id)} ·{" "}
               {money(selected.price)}
+            </p>
+            <p>
+              <strong>Doctor:</strong>{" "}
+              {(() => {
+                const doc = doctorById(data, selected.doctor_id);
+                if (!doc) return "Sin asignar";
+                return (
+                  <span>
+                    <span
+                      className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
+                      style={{ backgroundColor: doc.color }}
+                    />
+                    {doc.name} · {SPECIALTY_LABEL[doc.specialty]}
+                  </span>
+                );
+              })()}
             </p>
             <p>
               <strong>Teléfono:</strong> {contactPhone(data, selected.contact_id) || "—"}
@@ -407,6 +450,14 @@ export default function CalendarioPage() {
                   ))}
                   {placed.map(({ appt, col, cols }) => {
                     const c = SOURCE_COLOR[appt.source];
+                    const doc = doctorById(data, appt.doctor_id);
+                    const blockStyle = doc
+                      ? {
+                          backgroundColor: `${doc.color}26`,
+                          borderLeftColor: doc.color,
+                          color: "#1e293b",
+                        }
+                      : undefined;
                     const startMin = minutesOf(appt.start_time);
                     const endMin = minutesOf(appt.end_time);
                     const top = Math.max(0, ((startMin - FIRST_HOUR * 60) / 60) * HOUR_PX);
@@ -422,9 +473,9 @@ export default function CalendarioPage() {
                         onClick={() => setSelectedId(appt.id)}
                         className={cn(
                           "absolute overflow-hidden rounded-md border-l-4 px-1.5 py-1 text-left",
-                          c.bg,
-                          c.border,
-                          c.text,
+                          !doc && c.bg,
+                          !doc && c.border,
+                          !doc && c.text,
                           appt.status === "cancelled" && "opacity-50 line-through",
                           appt.status === "conflict" && "border-dashed border-red-500",
                           selectedId === appt.id && "ring-2 ring-slate-900"
@@ -434,6 +485,7 @@ export default function CalendarioPage() {
                           height,
                           left: `calc(${(col / cols) * 100}% + 2px)`,
                           width: `calc(${100 / cols}% - 4px)`,
+                          ...blockStyle,
                         }}
                       >
                         <p className="truncate text-xs font-bold leading-tight">
@@ -445,7 +497,7 @@ export default function CalendarioPage() {
                               {serviceName(data, appt.service_id)}
                             </p>
                             <p className="truncate text-[11px] leading-tight opacity-80">
-                              {c.label}
+                              {doc ? doctorName(data, appt.doctor_id) : c.label}
                             </p>
                             <span
                               className={cn(

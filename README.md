@@ -24,14 +24,15 @@ Pages + GitHub. El mismo stack del POS de EL RODEO.
 |---|---|
 | **Login** (`/login`) | Entrar, crear cuenta y recuperar contraseña con Supabase Auth. Al registrarse, el usuario queda ligado a la Org #1 piloto (ver `AUTH_SETUP.md`). |
 | **Agenda** (`/dashboard`) | Agenda unificada del día, con alerta de conflictos, Confirmar, Check-in (completed) y Cancelar. **Exige sesión** cuando Supabase está configurado; sin sesión redirige a `/login`. |
-| **Calendario** (`/dashboard/calendario`) | Vista tipo Google Calendar por semana y por día (8:00–20:00), con color por origen de la cita: Google Calendar azul, Promotor verde, Link público morado, WhatsApp turquesa. Cada cita marca si es la **primera vez** que viene el cliente o si **ya había venido**, calculado del historial del mismo contacto. Al pulsar una cita se ve el detalle y se puede confirmar, hacer check-in o cancelar. |
-| **Nueva cita** (`/dashboard/nueva`) | Crea cita validando el anti-empalme. Si choca, NO se guarda: muestra con quién choca y ofrece guardarla como `conflict`. |
+| **Calendario** (`/dashboard/calendario`) | Vista tipo Google Calendar por semana y por día (8:00–20:00), con el color del **doctor** que atiende cada cita. La leyenda muestra cada doctor con su color y especialidad, y de dónde llegó la cita (Google Calendar azul, Promotor verde, Link público morado, WhatsApp turquesa). Cada cita marca si es la **primera vez** que viene el cliente o si **ya había venido**, calculado del historial del mismo contacto. Al pulsar una cita se ve el detalle y se puede confirmar, hacer check-in o cancelar. |
+| **Nueva cita** (`/dashboard/nueva`) | Crea cita validando el anti-empalme. Si choca, NO se guarda: muestra con quién choca y ofrece guardarla como `conflict`. Permite elegir el **doctor** (opcional): la cita debe caer dentro de su horario. |
+| **Doctores** (`/dashboard/doctores`) | Alta, edición y pausa de doctores. Cada uno con **nombre, especialidad** (Doctor general, Ortodoncia y general, Endodoncista, Endodoncista y general, Ortopediatra), **color** en el calendario (se puede cambiar cuando quieras) y **horarios** por día de la semana. Al **quitar** a un doctor no se borra: queda pausado, sus citas pasadas se conservan y ya no se le agendan citas nuevas; se puede volver a activar. Se guarda en localStorage y en Supabase (tabla `doctors`, migración `supabase/migrations/001_doctors.sql`). |
 | **Promotores** (`/dashboard/promotores`) | Alta de promotores y liquidación: comisiones **solo sobre citas `completed`**, con `commission_rate` en %. |
 | **Servicios** (`/dashboard/servicios`) | Alta/baja de servicios; la duración es la que usa el anti-empalme. |
 | **Conectores** (`/dashboard/conectores`) | Estado real: Google Calendar **pendiente**, Sheets **listo**, WhatsApp **Fase 2**. |
 | **Link público** (`/dashboard/link`) | Link `vincimia.link/slug`, copiar, y editor del buffer (5/10/15/30 min). |
 | **Ajustes** (`/dashboard/ajustes`) | Cambia los datos del negocio (nombre, enlace, tiempo entre citas, correo de Google Calendar) y borra los datos de ejemplo con doble confirmación. Guarda en localStorage y en Supabase (update en `organizations` + deletes en `appointments`/`contacts`/`services`/`promoters`); no borra la organización ni la cuenta. |
-| **Reserva pública** (`/reserva/[slug]`) | El cliente elige servicio, fecha y solo ve horarios libres. Crea la cita en `pending` y el contacto si no existe. |
+| **Reserva pública** (`/reserva/[slug]`) | El cliente elige servicio, **doctor** (opcional) y fecha, y solo ve horarios libres dentro del horario de ese doctor. Crea la cita en `pending` y el contacto si no existe. |
 | **Webhook Sheets** (`/api/webhook/sheets`) | Recibe filas de Google Sheets con secreto Bearer, corre el anti-empalme en Supabase y responde `success` o `conflict`. |
 | **Edge Function** (`supabase/functions/sync-excel-promoter`) | Misma lógica del webhook, para quien prefiera que viva en Supabase. Usa una u otra, no las dos. |
 
@@ -49,7 +50,10 @@ Las comisiones se liquidan **solo** sobre `completed`. Las citas en
 
 Una cita nueva choca si su intervalo `[inicio, fin + buffer)` se traslapa
 con el de una cita existente en estado `pending`, `confirmed` o
-`completed`. La misma función vive en `src/lib/anti-overlap.ts` y la usan
+`completed` **del mismo doctor**. Dos doctores pueden atender a la misma
+hora porque son agendas paralelas; una cita sin doctor asignado choca con
+todas. Además, la cita debe caer dentro del horario del doctor elegido
+(ver Doctores). La misma función vive en `src/lib/anti-overlap.ts` y la usan
 la Agenda, Nueva cita, el link público y el webhook de Sheets.
 
 Ejemplo con los datos de prueba: Laura Méndez 10:00, 60 min (hasta 11:00)

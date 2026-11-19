@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import {
   contactName,
   contactPhone,
+  doctorById,
+  doctorName,
   fmtTime,
   loadStore,
   resetDemo,
@@ -17,7 +19,7 @@ import {
   type StoreData,
 } from "@/lib/store";
 import { todayISO } from "@/lib/demo-data";
-import { SOURCE_LABEL, STATUS_LABEL, money, type StatusType } from "@/lib/types";
+import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_LABEL, money, type StatusType } from "@/lib/types";
 import { AlertTriangle, CalendarCheck, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -158,6 +160,17 @@ export default function AgendaPage() {
                     min · {money(a.price)}
                     {a.promoter_id && (
                       <> · Promotor: {promoterName(data, a.promoter_id)}</>
+                    )}
+                    {a.doctor_id && (
+                      <>
+                        {" "}· Doctor:{" "}
+                        <span
+                          className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
+                          style={{ backgroundColor: doctorById(data, a.doctor_id)?.color ?? "#94a3b8" }}
+                        />
+                        {doctorName(data, a.doctor_id)} (
+                        {SPECIALTY_LABEL[doctorById(data, a.doctor_id)?.specialty ?? "general"]})
+                      </>
                     )}
                   </p>
                   <p className="text-xs text-slate-500">

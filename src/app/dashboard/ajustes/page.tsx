@@ -55,9 +55,10 @@ export default function AjustesPage() {
     clientes: data.contacts.length,
     servicios: data.services.length,
     promotores: data.promoters.length,
+    doctores: (data.doctors ?? []).length,
   };
   const hasDemoData =
-    counts.citas + counts.clientes + counts.servicios + counts.promotores > 0;
+    counts.citas + counts.clientes + counts.servicios + counts.promotores + counts.doctores > 0;
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,6 +173,7 @@ export default function AjustesPage() {
         "contacts",
         "services",
         "promoters",
+        "doctors",
       ]) {
         const { error: deleteError } = await client
           .from(table)
@@ -334,8 +336,8 @@ export default function AjustesPage() {
               <p className="text-sm text-slate-600">
                 Ahora mismo tu agenda tiene los datos de ejemplo con los que
                 se probó la app: {counts.citas} citas, {counts.clientes}{" "}
-                clientes, {counts.servicios} servicios y {counts.promotores}{" "}
-                promotores.
+                clientes, {counts.servicios} servicios, {counts.promotores}{" "}
+                promotores y {counts.doctores} doctores.
               </p>
               {!confirmClear ? (
                 <Button
@@ -351,9 +353,9 @@ export default function AjustesPage() {
                     ¿Seguro que quieres borrarlos?
                   </p>
                   <p className="mt-1 text-sm text-red-700">
-                    Esto borra todas las citas, los clientes, los servicios
-                    y los promotores de ejemplo. Tu negocio y tu cuenta no
-                    se borran. Esta acción no se puede deshacer.
+                    Esto borra todas las citas, los clientes, los servicios,
+                    los promotores y los doctores de ejemplo. Tu negocio y tu
+                    cuenta no se borran. Esta acción no se puede deshacer.
                   </p>
                   <div className="mt-3 flex gap-2">
                     <Button

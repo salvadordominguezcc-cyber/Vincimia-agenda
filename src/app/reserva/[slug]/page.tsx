@@ -9,10 +9,11 @@ import { todayISO } from "@/lib/demo-data";
 import {
   contactName,
   createAppointment,
+  doctorById,
   loadStore,
   type StoreData,
 } from "@/lib/store";
-import { money, type Appointment } from "@/lib/types";
+import { money, SPECIALTY_LABEL, type Appointment } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ export default function ReservaPage({
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [serviceId, setServiceId] = useState("");
+  const [doctorId, setDoctorId] = useState("");
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState("");
   const [conflict, setConflict] = useState<Appointment | null>(null);
@@ -62,8 +64,16 @@ export default function ReservaPage({
   }
 
   const service = data.services.find((s) => s.id === serviceId);
+  const doctor = doctorById(data, doctorId || null);
   const slots = service
-    ? freeSlots(date, service.duration_minutes, data.appointments, data.org.buffer_minutes)
+    ? freeSlots(
+        date,
+        service.duration_minutes,
+        data.appointments,
+        data.org.buffer_minutes,
+        doctor ? doctor.schedule : null,
+        doctor ? doctor.id : null
+      )
     : [];
 
   const submit = (e: React.FormEvent) => {
@@ -82,6 +92,7 @@ export default function ReservaPage({
       time,
       promoterId: null,
       source: "vincimia_link",
+      doctorId: doctorId || null,
     });
     if (result.ok) {
       setDone(true);
@@ -119,6 +130,15 @@ export default function ReservaPage({
               <p className="mt-2 text-slate-600">
                 {service?.name} · {date} a las {time} · {service && money(service.price)}
               </p>
+              {doctor && (
+                <p className="mt-1 text-sm text-slate-600">
+                  <span
+                    className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
+                    style={{ backgroundColor: doctor.color }}
+                  />
+                  Con {doctor.name} · {SPECIALTY_LABEL[doctor.specialty]}
+                </p>
+              )}
               <p className="mt-1 text-sm text-slate-500">
                 Quedó en <strong>pendiente</strong>. La clínica te confirmará
                 por teléfono. No hay confirmación automática por WhatsApp en
@@ -191,6 +211,32 @@ export default function ReservaPage({
                         </option>
                       ))}
                   </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Doctor (opcional)</label>
+                  <select
+                    value={doctorId}
+                    onChange={(e) => {
+                      setDoctorId(e.target.value);
+                      setTime("");
+                    }}
+                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="">Sin preferencia</option>
+                    {data.doctors
+                      .filter((d) => d.active)
+                      .map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} · {SPECIALTY_LABEL[d.specialty]}
+                        </option>
+                      ))}
+                  </select>
+                  {doctor && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Solo se muestran los horarios en los que atiende{" "}
+                      {doctor.name}.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium">Fecha *</label>

@@ -9,13 +9,15 @@ import { Input } from "@/components/ui/input";
 import {
   contactName,
   createAppointment,
+  doctorById,
+  doctorWorksAt,
   fmtTime,
   loadStore,
   saveAsConflict,
   type StoreData,
 } from "@/lib/store";
 import { todayISO } from "@/lib/demo-data";
-import { money, type Appointment, type SourceType } from "@/lib/types";
+import { money, SPECIALTY_LABEL, type Appointment, type SourceType } from "@/lib/types";
 import { AlertTriangle } from "lucide-react";
 
 export default function NuevaCitaPage() {
@@ -24,6 +26,7 @@ export default function NuevaCitaPage() {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [serviceId, setServiceId] = useState("");
+  const [doctorId, setDoctorId] = useState("");
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState("09:00");
   const [promoterId, setPromoterId] = useState("");
@@ -52,6 +55,7 @@ export default function NuevaCitaPage() {
       time,
       promoterId: promoterId || null,
       source,
+      doctorId: doctorId || null,
     });
     if (result.ok) {
       router.push("/dashboard");
@@ -76,6 +80,7 @@ export default function NuevaCitaPage() {
         time,
         promoterId: promoterId || null,
         source,
+        doctorId: doctorId || null,
       },
       conflict
     );
@@ -173,6 +178,51 @@ export default function NuevaCitaPage() {
                   {money(service.price)}
                 </p>
               )}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Doctor (opcional)</label>
+              <select
+                value={doctorId}
+                onChange={(e) => setDoctorId(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              >
+                <option value="">Sin asignar</option>
+                {data.doctors
+                  .filter((d) => d.active)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} · {SPECIALTY_LABEL[d.specialty]}
+                    </option>
+                  ))}
+              </select>
+              {doctorId &&
+                (() => {
+                  const doc = doctorById(data, doctorId);
+                  if (!doc) return null;
+                  const weekday = new Date(`${date}T12:00:00`).getDay();
+                  const day = doc.schedule.find((d) => d.weekday === weekday);
+                  const works = service
+                    ? doctorWorksAt(doc, date, time, service.duration_minutes)
+                    : { ok: true };
+                  return (
+                    <p className="mt-1 text-xs text-slate-500">
+                      <span
+                        className="mr-1 inline-block h-3 w-3 rounded-full align-middle"
+                        style={{ backgroundColor: doc.color }}
+                      />
+                      {doc.name} · {SPECIALTY_LABEL[doc.specialty]} ·{" "}
+                      {day && day.active
+                        ? `ese día atiende de ${day.start} a ${day.end}`
+                        : "ese día no atiende"}
+                      {!works.ok && service && (
+                        <span className="font-medium text-red-700">
+                          {" "}
+                          — la cita a las {time} queda fuera de su horario.
+                        </span>
+                      )}
+                    </p>
+                  );
+                })()}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

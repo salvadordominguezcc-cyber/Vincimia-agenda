@@ -9,6 +9,7 @@ import { findConflict } from "./anti-overlap";
 import {
   DEMO_APPOINTMENTS,
   DEMO_CONTACTS,
+  DEMO_DOCTORS,
   DEMO_ORG,
   DEMO_PROMOTERS,
   DEMO_SERVICES,
@@ -17,6 +18,7 @@ import {
 import type {
   Appointment,
   Contact,
+  Doctor,
   Organization,
   Promoter,
   Service,
@@ -32,6 +34,7 @@ export interface StoreData {
   promoters: Promoter[];
   contacts: Contact[];
   appointments: Appointment[];
+  doctors: Doctor[];
   seededFor: string;
   /**
    * true cuando el usuario borró los datos de ejemplo en Ajustes.
@@ -48,6 +51,7 @@ function seed(): StoreData {
     promoters: DEMO_PROMOTERS,
     contacts: DEMO_CONTACTS,
     appointments: DEMO_APPOINTMENTS,
+    doctors: DEMO_DOCTORS,
     seededFor: todayISO(),
     demoCleared: false,
   };
@@ -63,6 +67,9 @@ export function loadStore(): StoreData {
       return s;
     }
     const parsed = JSON.parse(raw) as StoreData;
+    // Migración suave: los almacenes viejos no tenían doctores.
+    if (!parsed.doctors) parsed.doctors = DEMO_DOCTORS;
+    if (!parsed.appointments) parsed.appointments = [];
     // Cada día se regeneran las citas de ejemplo para que la Agenda
     // de hoy siempre tenga datos con los que probar el anti-empalme.
     // Salvo que el usuario ya haya borrado los datos de ejemplo en
@@ -77,6 +84,7 @@ export function loadStore(): StoreData {
       s.services = parsed.services;
       s.promoters = parsed.promoters;
       s.contacts = parsed.contacts;
+      s.doctors = parsed.doctors;
       s.org = parsed.org;
       localStorage.setItem(KEY, JSON.stringify(s));
       return s;
@@ -111,10 +119,45 @@ export function clearDemoData(data: StoreData): StoreData {
     promoters: [],
     contacts: [],
     appointments: [],
+    doctors: [],
     demoCleared: true,
   };
   saveStore(next);
   return next;
+}
+
+export function doctorName(data: StoreData, id: string | null): string {
+  if (!id) return "Sin asignar";
+  return data.doctors.find((d) => d.id === id)?.name ?? "Sin asignar";
+}
+
+export function doctorById(data: StoreData, id: string | null): Doctor | null {
+  if (!id) return null;
+  return data.doctors.find((d) => d.id === id) ?? null;
+}
+
+/** ¿El doctor atiende ese día a esa hora (la cita completa, no solo el inicio)? */
+export function doctorWorksAt(
+  doctor: Doctor,
+  dateISO: string,
+  time: string,
+  durationMinutes: number
+): { ok: boolean; reason?: string } {
+  const weekday = new Date(`${dateISO}T12:00:00`).getDay();
+  const day = doctor.schedule.find((d) => d.weekday === weekday);
+  if (!day || !day.active) {
+    return { ok: false, reason: "ese día no atiende" };
+  }
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const start = toMin(time);
+  const end = start + durationMinutes;
+  if (start < toMin(day.start) || end > toMin(day.end)) {
+    return {
+      ok: false,
+      reason: `ese día atiende de ${day.start} a ${day.end}`,
+    };
+  }
+  return { ok: true };
 }
 
 export function contactName(data: StoreData, id: string | null): string {
@@ -149,6 +192,7 @@ export interface NewAppointmentInput {
   time: string;
   promoterId: string | null;
   source: SourceType;
+  doctorId?: string | null;
   notes?: string;
 }
 
@@ -169,6 +213,20 @@ export function createAppointment(
   if (!service) return { ok: false, error: "Servicio no encontrado." };
   if (!input.clientName.trim())
     return { ok: false, error: "Falta el nombre del cliente." };
+  // Si hay doctor elegido, la cita debe caer dentro de su horario.
+  const doctor = input.doctorId ? doctorById(data, input.doctorId) : null;
+  if (input.doctorId && !doctor) {
+    return { ok: false, error: "Ese doctor no existe." };
+  }
+  if (doctor && doctor.active) {
+    const works = doctorWorksAt(doctor, input.date, input.time, service.duration_minutes);
+    if (!works.ok) {
+      return {
+        ok: false,
+        error: `${doctor.name} no atiende ${works.reason ?? "a esa hora"}. Elige otro horario o a otro doctor.`,
+      };
+    }
+  }
   const startISO = `${input.date}T${input.time}:00`;
   const start = new Date(startISO);
   const end = new Date(start.getTime() + service.duration_minutes * 60_000);
@@ -179,7 +237,9 @@ export function createAppointment(
     startISO,
     service.duration_minutes,
     data.appointments,
-    data.org.buffer_minutes
+    data.org.buffer_minutes,
+    undefined,
+    input.doctorId ?? null
   );
   if (conflict) return { ok: false, conflictWith: conflict };
 
@@ -206,6 +266,7 @@ export function createAppointment(
     contact_id: contact.id,
     service_id: service.id,
     promoter_id: input.promoterId,
+    doctor_id: input.doctorId ?? null,
     start_time: startISO,
     end_time: endISO,
     duration_minutes: service.duration_minutes,
@@ -259,6 +320,7 @@ export function saveAsConflict(
     contact_id: contact.id,
     service_id: service.id,
     promoter_id: input.promoterId,
+    doctor_id: input.doctorId ?? null,
     start_time: startISO,
     end_time: endISO,
     duration_minutes: service.duration_minutes,

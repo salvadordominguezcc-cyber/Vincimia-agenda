@@ -23,6 +23,7 @@ const NAV = [
   { href: "/dashboard", label: "Agenda" },
   { href: "/dashboard/calendario", label: "Calendario" },
   { href: "/dashboard/nueva", label: "Nueva cita" },
+  { href: "/dashboard/doctores", label: "Doctores" },
   { href: "/dashboard/promotores", label: "Promotores" },
   { href: "/dashboard/servicios", label: "Servicios" },
   { href: "/dashboard/conectores", label: "Conectores" },

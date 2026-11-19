@@ -88,6 +88,24 @@ CREATE TABLE IF NOT EXISTS services (
 );
 
 -- ---------------------------------------------------------------------------
+-- 4b. DOCTORES (color, especialidad y horarios por doctor)
+-- Especialidades: Doctor general, Ortodoncia y general, Endodoncista,
+-- Endodoncista y general, Ortopediatra. Horario en JSON por día:
+-- [{weekday, start, end, active}] con weekday 0 = domingo … 6 = sábado.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS doctors (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  specialty TEXT NOT NULL DEFAULT 'general'
+    CHECK (specialty IN ('general', 'ortodoncia_general', 'endodoncista', 'endodoncista_general', 'ortopediatra')),
+  color TEXT NOT NULL DEFAULT '#2563eb',
+  schedule JSONB NOT NULL DEFAULT '[]'::jsonb,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------------
 -- 5. CONTACTOS / CLIENTES
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS contacts (
@@ -113,6 +131,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
   service_id UUID REFERENCES services(id) ON DELETE SET NULL,
   promoter_id UUID REFERENCES promoters(id) ON DELETE SET NULL,
+  doctor_id UUID REFERENCES doctors(id) ON DELETE SET NULL,
   start_time TIMESTAMPTZ NOT NULL,
   end_time TIMESTAMPTZ NOT NULL,
   duration_minutes INT NOT NULL DEFAULT 45,
@@ -134,6 +153,10 @@ CREATE INDEX IF NOT EXISTS idx_appointments_promoter
   ON appointments (promoter_id, status);
 CREATE INDEX IF NOT EXISTS idx_appointments_contact
   ON appointments (contact_id);
+CREATE INDEX IF NOT EXISTS idx_doctors_org
+  ON doctors (organization_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_doctor
+  ON appointments (doctor_id);
 
 -- ---------------------------------------------------------------------------
 -- 7. RLS ACTIVADO EN TODAS LAS TABLAS
@@ -144,6 +167,7 @@ ALTER TABLE promoters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE doctors ENABLE ROW LEVEL SECURITY;
 
 -- Organizaciones: ver solo las propias; crear, solo autenticado.
 DROP POLICY IF EXISTS "org_select_members" ON organizations;
@@ -174,6 +198,11 @@ DROP POLICY IF EXISTS "contacts_members" ON contacts;
 CREATE POLICY "contacts_members" ON contacts FOR ALL
   USING (public.is_org_member(organization_id))
   WITH CHECK (public.is_org_member(organization_id));
+DROP POLICY IF EXISTS "doctors_members" ON doctors;
+CREATE POLICY "doctors_members" ON doctors FOR ALL
+  USING (public.is_org_member(organization_id))
+  WITH CHECK (public.is_org_member(organization_id));
+
 DROP POLICY IF EXISTS "appointments_members" ON appointments;
 CREATE POLICY "appointments_members" ON appointments FOR ALL
   USING (public.is_org_member(organization_id))
@@ -212,10 +241,18 @@ INSERT INTO contacts (id, organization_id, full_name, phone) VALUES
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', '11111111-1111-1111-1111-111111111111', 'Mariana Torres', '+52 686 222 3344')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO appointments (id, organization_id, contact_id, service_id, promoter_id, start_time, end_time, duration_minutes, price, status, source, notes) VALUES
-  ('d0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', '88888888-8888-8888-8888-888888888888', '22222222-2222-2222-2222-222222222222', NULL, CURRENT_DATE + TIME '09:00', CURRENT_DATE + TIME '09:45', 45, 500, 'completed', 'google_calendar', 'Cita creada a mano en Google Calendar.'),
-  ('d0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', '99999999-9999-9999-9999-999999999999', '33333333-3333-3333-3333-333333333333', '66666666-6666-6666-6666-666666666666', CURRENT_DATE + TIME '10:00', CURRENT_DATE + TIME '11:00', 60, 800, 'confirmed', 'excel_promoter', 'Promotor: Carlos M.'),
-  ('d0000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', '77777777-7777-7777-7777-777777777777', CURRENT_DATE + TIME '10:15', CURRENT_DATE + TIME '10:45', 30, 350, 'conflict', 'excel_promoter', 'CONFLICTO: choca con Laura Méndez 10:00–11:00 + 15 min de buffer (hasta 11:15). No se le cobra comisión.'),
-  ('d0000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', NULL, CURRENT_DATE + TIME '11:30', CURRENT_DATE + TIME '12:15', 45, 500, 'pending', 'vincimia_link', 'Reservó desde el link público.'),
-  ('d0000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'cccccccc-cccc-cccc-cccc-cccccccccccc', '55555555-5555-5555-5555-555555555555', '66666666-6666-6666-6666-666666666666', CURRENT_DATE + TIME '12:30', CURRENT_DATE + TIME '13:00', 30, 600, 'pending', 'excel_promoter', 'Promotor: Carlos M.')
+INSERT INTO doctors (id, organization_id, name, specialty, color, schedule) VALUES
+  ('a1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Dra. Ana López', 'general', '#2563eb', '[{"weekday":1,"start":"09:00","end":"18:00","active":true},{"weekday":2,"start":"09:00","end":"18:00","active":true},{"weekday":3,"start":"09:00","end":"18:00","active":true},{"weekday":4,"start":"09:00","end":"18:00","active":true},{"weekday":5,"start":"09:00","end":"18:00","active":true},{"weekday":6,"start":"09:00","end":"14:00","active":true}]'::jsonb),
+  ('a2222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Dr. Carlos Ruiz', 'ortodoncia_general', '#7c3aed', '[{"weekday":1,"start":"10:00","end":"19:00","active":true},{"weekday":2,"start":"10:00","end":"19:00","active":true},{"weekday":3,"start":"10:00","end":"19:00","active":true},{"weekday":4,"start":"10:00","end":"19:00","active":true},{"weekday":5,"start":"10:00","end":"19:00","active":true}]'::jsonb),
+  ('a3333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'Dra. María Torres', 'endodoncista', '#059669', '[{"weekday":1,"start":"09:00","end":"17:00","active":true},{"weekday":3,"start":"09:00","end":"17:00","active":true},{"weekday":5,"start":"09:00","end":"17:00","active":true}]'::jsonb),
+  ('a4444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111', 'Dr. Jorge Sánchez', 'endodoncista_general', '#ea580c', '[{"weekday":2,"start":"09:00","end":"15:00","active":true},{"weekday":4,"start":"09:00","end":"15:00","active":true},{"weekday":6,"start":"09:00","end":"15:00","active":true}]'::jsonb),
+  ('a5555555-5555-5555-5555-555555555555', '11111111-1111-1111-1111-111111111111', 'Dra. Lucía Fernández', 'ortopediatra', '#db2777', '[{"weekday":1,"start":"09:00","end":"15:00","active":true},{"weekday":2,"start":"09:00","end":"15:00","active":true},{"weekday":3,"start":"09:00","end":"15:00","active":true},{"weekday":4,"start":"09:00","end":"15:00","active":true},{"weekday":5,"start":"09:00","end":"15:00","active":true}]'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO appointments (id, organization_id, contact_id, service_id, promoter_id, doctor_id, start_time, end_time, duration_minutes, price, status, source, notes) VALUES
+  ('d0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', '88888888-8888-8888-8888-888888888888', '22222222-2222-2222-2222-222222222222', NULL, 'a1111111-1111-1111-1111-111111111111', CURRENT_DATE + TIME '09:00', CURRENT_DATE + TIME '09:45', 45, 500, 'completed', 'google_calendar', 'Cita creada a mano en Google Calendar.'),
+  ('d0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', '99999999-9999-9999-9999-999999999999', '33333333-3333-3333-3333-333333333333', '66666666-6666-6666-6666-666666666666', 'a1111111-1111-1111-1111-111111111111', CURRENT_DATE + TIME '10:00', CURRENT_DATE + TIME '11:00', 60, 800, 'confirmed', 'excel_promoter', 'Promotor: Carlos M.'),
+  ('d0000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', '77777777-7777-7777-7777-777777777777', 'a1111111-1111-1111-1111-111111111111', CURRENT_DATE + TIME '10:15', CURRENT_DATE + TIME '10:45', 30, 350, 'conflict', 'excel_promoter', 'CONFLICTO: choca con Laura Méndez 10:00–11:00 + 15 min de buffer (hasta 11:15). No se le cobra comisión.'),
+  ('d0000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', NULL, 'a2222222-2222-2222-2222-222222222222', CURRENT_DATE + TIME '11:30', CURRENT_DATE + TIME '12:15', 45, 500, 'pending', 'vincimia_link', 'Reservó desde el link público.'),
+  ('d0000000-0000-0000-0000-000000000005', '11111111-1111-1111-1111-111111111111', 'cccccccc-cccc-cccc-cccc-cccccccccccc', '55555555-5555-5555-5555-555555555555', '66666666-6666-6666-6666-666666666666', 'a2222222-2222-2222-2222-222222222222', CURRENT_DATE + TIME '12:30', CURRENT_DATE + TIME '13:00', 30, 600, 'pending', 'excel_promoter', 'Promotor: Carlos M.')
 ON CONFLICT (id) DO NOTHING;
