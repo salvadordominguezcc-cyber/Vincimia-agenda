@@ -23,7 +23,7 @@ import {
   loadOrg,
 } from "@/lib/server-appointments";
 import {
-  normalizePhone,
+  normalizeStoredPhone,
   sendWhatsAppText,
   whatsappConfigured,
   whatsappVerifyToken,
@@ -78,16 +78,25 @@ export async function POST(req: Request) {
         if (msg.type !== "text" || !msg.from || !msg.text?.body) continue;
         const fromDigits = findPhoneDigits(msg.from);
         const text = msg.text.body.trim().toLowerCase();
-        // Busca el contacto por teléfono (últimos 10 dígitos, México).
-        const last10 = fromDigits.slice(-10);
+        // Se busca el contacto por el teléfono COMPLETO en
+        // internacional (52… México, 1… Estados Unidos): los
+        // últimos 10 dígitos de un número de EUA podían coincidir
+        // con un contacto mexicano distinto. Meta manda el número
+        // en E.164 sin "+", así que el país se detecta solo.
+        const fromNormalized = normalizeStoredPhone(fromDigits);
         const { data: contacts } = await supabase
           .from("contacts")
-          .select("id, organization_id, full_name, phone")
-          .ilike("phone", `%${last10}`);
-        const contact = (contacts as { id: string; organization_id: string; full_name: string; phone: string }[] | null)?.[0];
+          .select("id, organization_id, full_name, phone");
+        const contact = (
+          contacts as
+            | { id: string; organization_id: string; full_name: string; phone: string }[]
+            | null
+        )?.find(
+          (c) => normalizeStoredPhone(c.phone) === fromNormalized
+        );
         if (!contact) {
           await sendWhatsAppText(
-            normalizePhone(msg.from) ?? msg.from,
+            normalizeStoredPhone(msg.from) ?? msg.from,
             "Hola, gracias por escribir a Vincimia Agenda. No encontramos una cita con este número. Llama a la clínica para agendar."
           ).catch(() => undefined);
           continue;
@@ -105,7 +114,7 @@ export async function POST(req: Request) {
           .order("start_time", { ascending: true })
           .limit(1);
         const apptRow = (appts as { id: string }[] | null)?.[0];
-        const to = normalizePhone(msg.from) ?? msg.from;
+        const to = normalizeStoredPhone(msg.from) ?? msg.from;
         if (!apptRow) {
           await sendWhatsAppText(
             to,

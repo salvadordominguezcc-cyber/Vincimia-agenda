@@ -19,6 +19,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizePhone, sendWhatsAppText, whatsappConfigured } from "./whatsapp";
+import { formatPhoneDisplay } from "./phone";
 import type { ApptFull, OrgRow } from "./server-appointments";
 
 /** Teléfono del dueño por defecto (Salvador), solo como último
@@ -69,7 +70,7 @@ export function buildOwnerCardText(
     ``,
     `Clínica: DENTIPLUS MEXICALI`,
     `Paciente: ${appt.contactName}`,
-    `Teléfono: ${appt.contactPhone ?? "—"}`,
+    `Teléfono: ${appt.contactPhone ? formatPhoneDisplay(appt.contactPhone) : "—"}`,
     `Fecha: ${date}`,
     `Hora: ${time}`,
     `Tratamiento que busca: ${promotion}`,

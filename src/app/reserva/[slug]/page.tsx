@@ -23,6 +23,12 @@ import { Input } from "@/components/ui/input";
 import { AlertTriangle, CheckCircle2, Download, Info, MessageCircle } from "lucide-react";
 import { fetchPublicCatalog, mergeCatalogIntoStore } from "@/lib/cloud-sync";
 import {
+  formatPhoneDisplay,
+  normalizePhone,
+  PHONE_COUNTRIES,
+  type PhoneCountry,
+} from "@/lib/phone";
+import {
   buildWhatsAppShareUrl,
   CLINIC_WHATSAPP_DISPLAY,
   formatFechaLarga,
@@ -41,6 +47,11 @@ export default function ReservaPage({
   const [data, setData] = useState<StoreData | null>(null);
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  /** País del teléfono del paciente (selector del formulario,
+   *  México por defecto): decide el prefijo con el que se guarda y
+   *  se confirma por WhatsApp. Un número de EUA sin este dato se
+   *  leía como mexicano y la confirmación nunca llegaba. */
+  const [phoneCountry, setPhoneCountry] = useState<PhoneCountry>("MX");
   const [serviceId, setServiceId] = useState("");
   const [doctorId, setDoctorId] = useState("");
   const [date, setDate] = useState(todayISO());
@@ -122,12 +133,16 @@ export default function ReservaPage({
   const doctor = doctorById(data, doctorId || null);
   /** Datos de la tarjeta "TU CITA" que se muestra al registrarse:
    *  solo valores reales de la reserva y del negocio, nada inventado. */
+  /** Teléfono completo en internacional sin "+" (52… México,
+   *  1… Estados Unidos) según el país elegido. Así se guarda en
+   *  la nube y en este aparato, y así se muestra en la tarjeta. */
+  const fullPhone = normalizePhone(clientPhone, phoneCountry) ?? clientPhone;
   const cardData: AppointmentCardData | null =
     done && service
       ? {
           clinicName: data.org.name,
           patientName: clientName,
-          phone: clientPhone,
+          phone: formatPhoneDisplay(fullPhone),
           date,
           time,
           serviceName: service.name,
@@ -176,7 +191,7 @@ export default function ReservaPage({
     // 1) Se guarda aquí mismo (anti-empalme local, como antes).
     const result = createAppointment(data, {
       clientName,
-      clientPhone,
+      clientPhone: fullPhone,
       serviceId,
       date,
       time,
@@ -206,7 +221,8 @@ export default function ReservaPage({
         body: JSON.stringify({
           slug: params.slug,
           client_name: clientName,
-          client_phone: clientPhone,
+          client_phone: fullPhone,
+          phone_country: phoneCountry,
           service_name: service?.name ?? "",
           date,
           time,
@@ -463,12 +479,30 @@ export default function ReservaPage({
                 </div>
                 <div>
                   <label className="text-sm font-medium">Teléfono *</label>
-                  <Input
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                    placeholder="+52 …"
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={phoneCountry}
+                      onChange={(e) =>
+                        setPhoneCountry(e.target.value as PhoneCountry)
+                      }
+                      aria-label="País del teléfono"
+                      className="h-10 shrink-0 rounded-lg border border-slate-300 bg-white px-2 text-sm"
+                    >
+                      {PHONE_COUNTRIES.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.label} {c.prefix}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      placeholder={
+                        phoneCountry === "US" ? "+1 …" : "+52 …"
+                      }
+                      required
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium">Servicio *</label>

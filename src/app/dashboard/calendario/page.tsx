@@ -35,6 +35,7 @@ import { notifyAppointmentStatus } from "@/lib/notify-channels";
 import { isCloudId, syncDown } from "@/lib/cloud-sync";
 import { supabaseConfigured } from "@/lib/supabase";
 import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_EMOJI, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
+import { formatPhoneDisplay, phoneDialDigits } from "@/lib/phone";
 import { CalendarCheck, CheckCircle2, Trash2, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -103,12 +104,11 @@ function minutesOf(iso: string): number {
   return h * 60 + m;
 }
 
-// Teléfono listo para llamar o escribir por WhatsApp: solo dígitos,
-// con 52 delante cuando es un celular mexicano de 10 dígitos.
+// Teléfono listo para llamar o escribir por WhatsApp: el
+// internacional completo (52… México, 1… Estados Unidos). Los
+// teléfonos viejos de 10 dígitos se leen como mexicanos, como antes.
 function phoneDigits(phone: string | null): string {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (digits.length === 10) return `52${digits}`;
-  return digits;
+  return phoneDialDigits(phone);
 }
 
 const dayName = new Intl.DateTimeFormat("es-MX", { weekday: "short" });
@@ -522,7 +522,7 @@ export default function CalendarioPage() {
                       className="font-medium text-brand-700 underline"
                       href={`tel:+${digits}`}
                     >
-                      {phone}
+                      {formatPhoneDisplay(phone)}
                     </a>
                     {" · "}
                     <a
@@ -817,7 +817,7 @@ export default function CalendarioPage() {
                               {contactName(data, appt.contact_id)}
                             </p>
                             <p className="text-[11px] leading-snug break-words">
-                              {phone ? `${phone} / ` : ""}
+                              {phone ? `${formatPhoneDisplay(phone)} / ` : ""}
                               {svc}
                             </p>
                             <p className="text-[11px] leading-snug break-words opacity-90">

@@ -1,7 +1,11 @@
 // Reserva pública en la nube — Vincimia Agenda.
 // POST /api/appointments/create
-//   { slug, client_name, client_phone, service_name, date, time,
-//     doctor_id?, doctor_name?, notes?, duration_minutes? }
+//   { slug, client_name, client_phone, phone_country?, service_name,
+//     date, time, doctor_id?, doctor_name?, notes?, duration_minutes? }
+// phone_country ("MX" | "US", por defecto "MX") es el país que el
+// paciente eligió en el selector del formulario: decide cómo se
+// normaliza el teléfono. Sin él, un número de EUA (+1) se leía como
+// mexicano y la confirmación por WhatsApp nunca llegaba.
 // duration_minutes (opcional, 15-120) es la duración del servicio
 // en el aparato del cliente: si el servicio no existe en la nube
 // con ese nombre, se usa esa duración en vez de adivinar 45 min
@@ -77,6 +81,12 @@ export async function POST(req: Request) {
   const slug = String(body.slug ?? "").trim().toLowerCase();
   const clientName = String(body.client_name ?? "").trim();
   const clientPhone = String(body.client_phone ?? "").trim();
+  // País del teléfono: solo MX o US; cualquier otro valor se trata
+  // como MX (el selector del formulario solo manda esos dos).
+  const phoneCountry =
+    String(body.phone_country ?? "MX").trim().toUpperCase() === "US"
+      ? "US"
+      : "MX";
   const serviceName = String(body.service_name ?? "").trim();
   const date = String(body.date ?? "").trim();
   const time = String(body.time ?? "").trim();
@@ -122,7 +132,13 @@ export async function POST(req: Request) {
       { status: 409 }
     );
   }
-  const contactId = await findOrCreateContact(supabase, org.id, clientName, clientPhone || null);
+  const contactId = await findOrCreateContact(
+    supabase,
+    org.id,
+    clientName,
+    clientPhone || null,
+    phoneCountry
+  );
   const status = doctor?.requires_deposit ? "on_hold" : "pending";
   const saved = await insertCloudAppointment(supabase, {
     organizationId: org.id,

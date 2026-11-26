@@ -13,6 +13,12 @@ export const DEFAULT_POLICY = "PARTICULAR /SALVADOR";
 export const DEFAULT_PROMOTION = "VALORACIÓN";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  detectPhoneCountry,
+  normalizePhone,
+  normalizeStoredPhone,
+  type PhoneCountry,
+} from "./phone";
 
 export interface CloudOrg {
   id: string;
@@ -128,23 +134,27 @@ export async function resolveDoctor(
   };
 }
 
-/** Contacto por teléfono (dígitos) o nombre; si no existe, se crea. */
+/** Contacto por teléfono (dígitos completos) o nombre; si no existe,
+ *  se crea. El teléfono se guarda en internacional sin "+"
+ *  (52… México, 1… Estados Unidos) y se compara por los dígitos
+ *  COMPLETOS: los últimos 10 de un número de EUA nunca deben
+ *  coincidir con un contacto mexicano. Los teléfonos viejos guardados
+ *  como 10 dígitos locales se leen como mexicanos, como antes. */
 export async function findOrCreateContact(
   supabase: SupabaseClient,
   organizationId: string,
   fullName: string,
-  phone: string | null
+  phone: string | null,
+  phoneCountry?: PhoneCountry
 ): Promise<string | null> {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (digits) {
-    // El teléfono se guarda como lo escribió el cliente; se compara
-    // por los últimos 10 dígitos para no fallar por el prefijo 52.
+  const normalized = normalizePhone(phone, phoneCountry ?? detectPhoneCountry(phone));
+  if (normalized) {
     const { data: byPhone } = await supabase
       .from("contacts")
       .select("id, phone")
       .eq("organization_id", organizationId);
-    const hit = (byPhone ?? []).find((c) =>
-      ((c as { phone?: string | null }).phone ?? "").replace(/\D/g, "").endsWith(digits.slice(-10))
+    const hit = (byPhone ?? []).find(
+      (c) => normalizeStoredPhone((c as { phone?: string | null }).phone) === normalized
     );
     if (hit) return (hit as { id: string }).id;
   }
@@ -161,7 +171,7 @@ export async function findOrCreateContact(
     .insert({
       organization_id: organizationId,
       full_name: fullName,
-      phone: phone || null,
+      phone: normalized,
     })
     .select("id")
     .single();

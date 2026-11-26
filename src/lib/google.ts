@@ -4,6 +4,8 @@
 // Sin GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET configurados, nada de
 // esto corre: la página Conectores dice Pendiente y por qué.
 
+import { formatPhoneDisplay, normalizeStoredPhone } from "./phone";
+
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
@@ -236,11 +238,13 @@ export function clientWhatsAppText(appt: AppointmentForGoogle): string {
 
 /** Link api.whatsapp.com/send con el texto ya escrito, listo para
  *  hablarle al cliente desde la descripción del evento (como lo hace
- *  Confirmafy hoy, pero sin depender de ese servicio externo). */
+ *  Confirmafy hoy, pero sin depender de ese servicio externo).
+ *  Usa el internacional completo (52… México, 1… Estados Unidos):
+ *  antes se pegaba un 52 fijo y un número de EUA quedaba roto. */
 export function clientWhatsAppLink(appt: AppointmentForGoogle): string | null {
-  const p10 = phone10(appt.contactPhone);
-  if (!p10) return null;
-  return `https://api.whatsapp.com/send?phone=52${p10}&text=${encodeURIComponent(
+  const full = normalizeStoredPhone(appt.contactPhone);
+  if (!full) return null;
+  return `https://api.whatsapp.com/send?phone=${full}&text=${encodeURIComponent(
     clientWhatsAppText(appt)
   )}`;
 }
@@ -274,7 +278,7 @@ export function googleEventBody(appt: AppointmentForGoogle): Record<string, unkn
   };
   const description =
     `Cita de ${appt.orgName} (Vincimia Agenda).\n` +
-    `Paciente: ${appt.contactName}${appt.contactPhone ? ` (${appt.contactPhone})` : ""}\n` +
+    `Paciente: ${appt.contactName}${appt.contactPhone ? ` (${formatPhoneDisplay(appt.contactPhone)})` : ""}\n` +
     `Servicio: ${appt.serviceName}\n` +
     `Doctor: ${appt.doctorName ?? "Sin asignar"}\n` +
     `Póliza: ${appt.policy ?? "PARTICULAR /SALVADOR"}\n` +

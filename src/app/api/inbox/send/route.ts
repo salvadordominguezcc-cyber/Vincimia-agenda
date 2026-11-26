@@ -15,7 +15,7 @@ export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
 import { loadOrg } from "@/lib/server-appointments";
-import { normalizePhone, sendWhatsAppText } from "@/lib/whatsapp";
+import { normalizeStoredPhone, sendWhatsAppText } from "@/lib/whatsapp";
 import { sendMessengerText } from "@/lib/messenger";
 import { sendInstagramText } from "@/lib/instagram";
 import type { InboxChannel } from "@/lib/inbox";
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   // El destinatario depende del canal: teléfono para WhatsApp, id de
   // Meta (PSID/IGSID) para Messenger e Instagram.
   const to =
-    channel === "whatsapp" ? (normalizePhone(recipient) ?? recipient) : recipient;
+    channel === "whatsapp" ? (normalizeStoredPhone(recipient) ?? recipient) : recipient;
   let messageId: string;
   try {
     if (channel === "whatsapp") {

@@ -18,7 +18,7 @@ import {
   type AppointmentForGoogle,
 } from "./google";
 import {
-  normalizePhone,
+  normalizeStoredPhone,
   sendWhatsAppReview,
   whatsappConfigured,
 } from "./whatsapp";
@@ -230,7 +230,7 @@ export async function queueReviewRequest(
     };
   }
 
-  const phone = normalizePhone(appt.contactPhone);
+  const phone = normalizeStoredPhone(appt.contactPhone);
   let result: ReviewRequestResult;
   if (!org.whatsapp_bot_enabled) {
     result = { status: "queued", reason: "El bot está apagado para este negocio." };

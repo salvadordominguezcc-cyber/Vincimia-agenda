@@ -35,7 +35,7 @@ import {
   type ReviewRequestResult,
 } from "@/lib/server-appointments";
 import {
-  normalizePhone,
+  normalizeStoredPhone,
   sendWhatsAppConfirmation,
   whatsappConfigured,
 } from "@/lib/whatsapp";
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
     } else if (!org.whatsapp_bot_enabled) {
       whatsapp = { done: false, reason: "El bot está apagado para este negocio." };
     } else {
-      const to = normalizePhone(appt.contactPhone);
+      const to = normalizeStoredPhone(appt.contactPhone);
       if (!to) {
         whatsapp = { done: false, reason: "El paciente no tiene teléfono guardado." };
       } else {

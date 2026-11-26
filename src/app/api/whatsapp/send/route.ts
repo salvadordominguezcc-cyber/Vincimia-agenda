@@ -18,7 +18,7 @@ import {
   loadOrg,
 } from "@/lib/server-appointments";
 import {
-  normalizePhone,
+  normalizeStoredPhone,
   sendWhatsAppConfirmation,
   whatsappConfigured,
 } from "@/lib/whatsapp";
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       { status: 404 }
     );
   }
-  const to = normalizePhone(appt.contactPhone);
+  const to = normalizeStoredPhone(appt.contactPhone);
   if (!to) {
     return Response.json(
       { ok: false, message: "Ese paciente no tiene teléfono guardado." },

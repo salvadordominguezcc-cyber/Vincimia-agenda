@@ -6,23 +6,29 @@
 // al mes por número son gratis; luego ~$0.16 MXN por mensaje de utilidad
 // en México (tarifa vigente desde el 1 de octubre de 2026).
 
+import {
+  detectPhoneCountry,
+  normalizePhone,
+  normalizeStoredPhone,
+  type PhoneCountry,
+} from "./phone";
+
+// La normalización con país vive en ./phone (sin secretos, se puede
+// importar desde el navegador); aquí se reexporta para que las rutas
+// que ya importaban desde este archivo sigan funcionando igual.
+export {
+  detectPhoneCountry,
+  normalizePhone,
+  normalizeStoredPhone,
+  type PhoneCountry,
+};
+
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
 export function whatsappConfigured(): boolean {
   return Boolean(
     process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID
   );
-}
-
-/** Normaliza un teléfono mexicano a formato internacional sin "+":
- *  10 dígitos → 52 + número; si ya trae 52, se deja. */
-export function normalizePhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 10) return `52${digits}`;
-  if (digits.length === 12 && digits.startsWith("52")) return digits;
-  if (digits.length === 11 && digits.startsWith("1")) return `52${digits.slice(1)}`;
-  return digits || null;
 }
 
 export function whatsappVerifyToken(): string | null {
