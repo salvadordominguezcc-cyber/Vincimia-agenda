@@ -20,8 +20,18 @@ import { DoctorChip } from "@/components/DoctorChip";
 import { Logo } from "@/components/Logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, Info, MessageCircle } from "lucide-react";
 import { fetchPublicCatalog, mergeCatalogIntoStore } from "@/lib/cloud-sync";
+import {
+  buildWhatsAppShareUrl,
+  CLINIC_WHATSAPP_DISPLAY,
+  formatFechaLarga,
+  formatHora12,
+  formatPrecio,
+  receptionNote,
+  saveAppointmentCard,
+  type AppointmentCardData,
+} from "@/lib/appointment-card";
 
 export default function ReservaPage({
   params,
@@ -49,6 +59,9 @@ export default function ReservaPage({
    *  porque el enlace real (clinica-dentiplus) solo vive en la nube
    *  y en este aparato todavía está el demo. */
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  /** Guardado de la tarjeta "TU CITA" como imagen en el teléfono. */
+  const [savingCard, setSavingCard] = useState(false);
+  const [saveCardMsg, setSaveCardMsg] = useState("");
 
   useEffect(() => {
     const d = loadStore();
@@ -107,6 +120,38 @@ export default function ReservaPage({
 
   const service = data.services.find((s) => s.id === serviceId);
   const doctor = doctorById(data, doctorId || null);
+  /** Datos de la tarjeta "TU CITA" que se muestra al registrarse:
+   *  solo valores reales de la reserva y del negocio, nada inventado. */
+  const cardData: AppointmentCardData | null =
+    done && service
+      ? {
+          clinicName: data.org.name,
+          patientName: clientName,
+          phone: clientPhone,
+          date,
+          time,
+          serviceName: service.name,
+          doctorName: doctor?.name ?? null,
+          price: service.price,
+          status: doneOnHold ? "En pausa" : "Pendiente por confirmar",
+        }
+      : null;
+  const saveCard = async () => {
+    if (!cardData || savingCard) return;
+    setSavingCard(true);
+    setSaveCardMsg("");
+    const res = await saveAppointmentCard(cardData);
+    setSavingCard(false);
+    if (res.ok) {
+      setSaveCardMsg(
+        res.method === "share"
+          ? "Se abrió para compartir o guardar la imagen."
+          : "Imagen descargada en tu teléfono."
+      );
+    } else if (!res.aborted) {
+      setSaveCardMsg(res.message);
+    }
+  };
   const slots = service
     ? freeSlots(
         date,
@@ -213,7 +258,125 @@ export default function ReservaPage({
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-8">
-        {done ? (
+        {done && cardData ? (
+          <div className="space-y-4">
+            <div className="text-center">
+              <CheckCircle2 className="mx-auto h-12 w-12 text-green-600" />
+              <h1 className="mt-3 text-2xl font-bold text-[#1e1b4b]">
+                ¡Cita registrada, {clientName}!
+              </h1>
+            </div>
+            {/* Tarjeta TU CITA: los datos ordenados para que el
+                paciente los guarde y los presente en recepción. */}
+            <Card className="overflow-hidden border-2 border-[#e0f2fe]">
+              <div className="bg-[#5b21b6] px-4 py-3 text-center">
+                <p className="text-xl font-extrabold tracking-wide text-white">
+                  TU CITA
+                </p>
+              </div>
+              <CardContent className="divide-y divide-slate-200 px-5 py-2">
+                {[
+                  { label: "Clínica", value: cardData.clinicName },
+                  { label: "Paciente", value: cardData.patientName },
+                  { label: "Teléfono", value: cardData.phone },
+                  { label: "Fecha", value: formatFechaLarga(cardData.date) },
+                  { label: "Hora", value: formatHora12(cardData.time) },
+                  { label: "Tratamiento", value: cardData.serviceName },
+                  {
+                    label: "Doctor",
+                    value: cardData.doctorName ?? "Sin preferencia",
+                  },
+                  { label: "Precio", value: formatPrecio(cardData.price) },
+                ].map((row) => (
+                  <div
+                    key={row.label}
+                    className="grid grid-cols-[110px_1fr] gap-2 py-2.5 text-left"
+                  >
+                    <span className="font-semibold text-slate-500">
+                      {row.label}:
+                    </span>
+                    <span className="font-semibold text-slate-900">
+                      {row.value}
+                    </span>
+                  </div>
+                ))}
+                <div className="grid grid-cols-[110px_1fr] gap-2 py-2.5 text-left">
+                  <span className="font-semibold text-slate-500">Estado:</span>
+                  <span className="font-bold text-amber-600">
+                    {cardData.status}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+            {/* Aviso de recepción + estado real de la cita. */}
+            <div className="rounded-2xl bg-cyan-100 p-4">
+              <p className="flex items-start gap-2 text-left font-semibold text-[#0e7490]">
+                <Info className="mt-0.5 h-5 w-5 shrink-0" />
+                {receptionNote(cardData)}
+              </p>
+              <p className="mt-3 text-left text-sm text-slate-600">
+                {doneOnHold ? (
+                  <>
+                    Tu cita quedó <strong>en pausa</strong>: este doctor solo
+                    atiende con cita y anticipo. La clínica revisará los
+                    horarios del doctor y te propondrá cuándo puede atenderte.
+                    Cuando aceptes, tu cita se confirma. Todavía no se cobra
+                    nada en línea.
+                  </>
+                ) : localOnly ? (
+                  <>
+                    Quedó en <strong>pendiente</strong>, pero solo se guardó
+                    en este aparato: no se pudo sincronizar con la agenda de
+                    la clínica, así que todavía no llega a Google Calendar ni
+                    te llegará la confirmación por WhatsApp. Avísale a la
+                    clínica para que la registre.
+                  </>
+                ) : (
+                  <>
+                    Quedó en <strong>pendiente</strong>. La clínica te
+                    confirmará por WhatsApp.
+                  </>
+                )}
+              </p>
+              <div className="mt-4 space-y-2">
+                <Button
+                  type="button"
+                  onClick={saveCard}
+                  disabled={savingCard}
+                  className="w-full bg-[#ec4899] py-6 text-base font-bold text-white hover:bg-[#db2777]"
+                >
+                  <Download className="mr-2 h-5 w-5" />
+                  {savingCard ? "Guardando…" : "Guardar mi cita"}
+                </Button>
+                <a
+                  href={buildWhatsAppShareUrl(cardData)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex w-full items-center justify-center rounded-lg border-2 border-green-600 bg-white px-4 py-3 text-base font-bold text-green-700"
+                >
+                  <MessageCircle className="mr-2 h-5 w-5" />
+                  Compartir por WhatsApp
+                </a>
+                {saveCardMsg && (
+                  <p className="text-center text-sm font-medium text-green-700">
+                    {saveCardMsg}
+                  </p>
+                )}
+              </div>
+            </div>
+            {!localOnly && (
+              <p className="text-center text-sm text-slate-500">
+                Te confirmamos tu cita por WhatsApp al{" "}
+                {CLINIC_WHATSAPP_DISPLAY}.
+              </p>
+            )}
+            <div className="text-center">
+              <Link href="/dashboard">
+                <Button variant="outline">Verla en la agenda (demo)</Button>
+              </Link>
+            </div>
+          </div>
+        ) : done ? (
           <Card>
             <CardContent className="py-10 text-center">
               <CheckCircle2 className="mx-auto h-10 w-10 text-green-600" />
