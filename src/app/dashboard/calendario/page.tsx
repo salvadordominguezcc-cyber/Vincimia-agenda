@@ -17,6 +17,7 @@ import {
   confirmAppointment,
   contactName,
   contactPhone,
+  deleteAppointment,
   doctorById,
   doctorName,
   fmtTime,
@@ -31,10 +32,10 @@ import {
 import { DoctorChip } from "@/components/DoctorChip";
 import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
 import { notifyAppointmentStatus } from "@/lib/notify-channels";
-import { syncDown } from "@/lib/cloud-sync";
+import { isCloudId, syncDown } from "@/lib/cloud-sync";
 import { supabaseConfigured } from "@/lib/supabase";
 import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
-import { CalendarCheck, CheckCircle2, X, XCircle } from "lucide-react";
+import { CalendarCheck, CheckCircle2, Trash2, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Horario que se muestra en el calendario (8:00 a 20:00).
@@ -147,6 +148,10 @@ export default function CalendarioPage() {
   const [copied, setCopied] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  // Eliminar: primero se pregunta, porque borrar no se deshace.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     setData(loadStore());
@@ -204,6 +209,54 @@ export default function CalendarioPage() {
         setCopied(false);
       }
     }
+  };
+
+  // Borra la cita de la agenda. Si vive en la nube, primero se
+  // borra allá (con su evento de Google, si lo tenía); si el
+  // servidor falla, la cita se queda y se muestra el error en
+  // palabras normales. Si solo vive en este aparato, se borra
+  // directo de aquí.
+  const removeAppointment = async (id: string) => {
+    if (!data) return;
+    setDeleting(true);
+    setDeleteError("");
+    const appt = data.appointments.find((a) => a.id === id);
+    let googleNote = "";
+    if (appt && isCloudId(appt.id) && supabaseConfigured()) {
+      try {
+        const res = await fetch("/api/appointments/delete", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${data.org.excel_webhook_secret}`,
+          },
+          body: JSON.stringify({
+            organization_id: data.org.id,
+            appointment_id: id,
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok) {
+          setDeleteError(
+            `${String(json.message ?? `No se pudo eliminar (error ${res.status}).`)} La cita se quedó en la agenda.`
+          );
+          setDeleting(false);
+          return;
+        }
+        if (json.google_note) googleNote = String(json.google_note);
+      } catch (e) {
+        setDeleteError(`No se pudo eliminar: ${String(e)}. La cita se quedó en la agenda.`);
+        setDeleting(false);
+        return;
+      }
+    }
+    setData(deleteAppointment({ ...data }, id));
+    setSelectedId(null);
+    setConfirmDelete(false);
+    setDeleting(false);
+    setSyncMessage(
+      googleNote ? `Cita eliminada de la agenda. ${googleNote}` : "Cita eliminada de la agenda."
+    );
   };
 
   const copyMessage = async () => {
@@ -532,6 +585,16 @@ export default function CalendarioPage() {
                   <XCircle className="h-4 w-4" /> Cancelar
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => {
+                  setDeleteError("");
+                  setConfirmDelete(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" /> Eliminar
+              </Button>
               {selected.status === "conflict" && (
                 <span className="flex items-center gap-1 text-xs font-medium text-red-700">
                   <CalendarCheck className="h-4 w-4" /> Esta cita está en conflicto:
@@ -539,6 +602,40 @@ export default function CalendarioPage() {
                 </span>
               )}
             </div>
+            {confirmDelete && (
+              <div className="mt-2 rounded-lg border-2 border-red-200 bg-red-50 p-3">
+                <p className="text-sm font-medium text-red-800">
+                  ¿Eliminar esta cita? Se borra de la agenda.
+                </p>
+                <p className="mt-1 text-xs text-red-700">
+                  Si la cita ya estaba en la nube, también se borra allá
+                  y su evento en Google Calendar. No se puede deshacer.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => removeAppointment(selected.id)}
+                    disabled={deleting}
+                  >
+                    {deleting ? "Eliminando…" : "Sí, eliminar"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                  >
+                    No, dejarla
+                  </Button>
+                </div>
+                {deleteError && (
+                  <p className="mt-2 rounded-lg bg-white p-2 text-xs font-medium text-red-800">
+                    {deleteError}
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -653,6 +750,8 @@ export default function CalendarioPage() {
                           setSelectedId(appt.id);
                           setProposal(appt.proposed_times ?? "");
                           setHoldError("");
+                          setConfirmDelete(false);
+                          setDeleteError("");
                         }}
                         className={cn(
                           "absolute overflow-hidden rounded-md border-l-4 px-1.5 py-1 text-left",

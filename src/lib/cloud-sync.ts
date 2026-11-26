@@ -100,7 +100,8 @@ export function mergeCloudIntoStore(data: StoreData, cloud: CloudBundle): StoreD
 }
 
 /** Sube las citas locales a la nube y devuelve cuántas subieron,
- *  cuántas ya estaban y el mapa local_id → cloud_id. */
+ *  cuántas ya estaban y el mapa local_id → cloud_id. Sube todas
+ *  las que solo viven en este aparato. */
 export async function uploadLocalAppointments(
   data: StoreData
 ): Promise<{
@@ -109,7 +110,23 @@ export async function uploadLocalAppointments(
   errors: string[];
   mapping: { local_id: string; cloud_id: string; skipped: boolean }[];
 }> {
-  const local = localOnlyAppointments(data);
+  return uploadSelectedAppointments(data, localOnlyAppointments(data).map((a) => a.id));
+}
+
+/** Sube solo las citas locales marcadas (ids) a la nube. Las que no
+ *  se marcan se quedan en el aparato, sin subir. Devuelve lo mismo
+ *  que uploadLocalAppointments. */
+export async function uploadSelectedAppointments(
+  data: StoreData,
+  selectedIds: string[]
+): Promise<{
+  uploaded: number;
+  skipped: number;
+  errors: string[];
+  mapping: { local_id: string; cloud_id: string; skipped: boolean }[];
+}> {
+  const wanted = new Set(selectedIds);
+  const local = localOnlyAppointments(data).filter((a) => wanted.has(a.id));
   const payload = local.map((a) => {
     const contact = data.contacts.find((c) => c.id === a.contact_id);
     const service = data.services.find((s) => s.id === a.service_id);

@@ -19,16 +19,26 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { clearDemoData, loadStore, saveStore, type StoreData } from "@/lib/store";
+import {
+  clearDemoData,
+  contactName,
+  doctorName,
+  fmtDate,
+  fmtTime,
+  loadStore,
+  saveStore,
+  serviceName,
+  type StoreData,
+} from "@/lib/store";
 import {
   applyCloudIds,
   fetchCloudAppointments,
   localOnlyAppointments,
   mergeCloudIntoStore,
-  uploadLocalAppointments,
+  uploadSelectedAppointments,
 } from "@/lib/cloud-sync";
 import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
-import { slugify } from "@/lib/types";
+import { slugify, STATUS_LABEL } from "@/lib/types";
 
 const LINK_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -51,6 +61,10 @@ export default function AjustesPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncError, setSyncError] = useState("");
+  // Citas marcadas para subir: por defecto todas menos las
+  // canceladas (esas no vale la pena subirlas). Las canceladas se
+  // pueden marcar a mano si de verdad se quieren subir.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     const d = loadStore();
@@ -62,6 +76,25 @@ export default function AjustesPage() {
     setBreakEnd(d.org.break_end ?? "");
     setGoogleEmail(d.org.connected_google_email ?? "");
   }, []);
+
+  // Las citas marcadas siguen a la lista de locales: las nuevas que
+  // llegan se marcan solas (menos las canceladas) y las que ya
+  // subieron dejan de aparecer. Así el usuario nunca sube una
+  // cancelada sin querer.
+  const localApptIds = data ? localOnlyAppointments(data).map((a) => a.id).join(",") : "";
+  useEffect(() => {
+    if (!data) return;
+    setSelectedIds((prev) => {
+      const current = localOnlyAppointments(data);
+      const kept = prev.filter((id) => current.some((a) => a.id === id));
+      const added = current
+        .filter((a) => a.status !== "cancelled" && !kept.includes(a.id))
+        .map((a) => a.id);
+      if (kept.length === prev.length && added.length === 0) return prev;
+      return [...kept, ...added];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localApptIds]);
 
   if (!data) return <p className="text-slate-500">Cargando…</p>;
 
@@ -75,6 +108,7 @@ export default function AjustesPage() {
   };
   const hasDemoData =
     counts.citas + counts.clientes + counts.servicios + counts.promotores + counts.doctores > 0;
+  const localAppts = localOnlyAppointments(data);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,16 +207,22 @@ export default function AjustesPage() {
     }
   };
 
-  // Sube a la nube las citas que solo viven en este aparato. No borra
+  // Sube a la nube solo las citas marcadas en la lista. No borra
   // nada local: solo les pone su id de la nube para que al confirmarlas
-  // ya lleguen a Google Calendar y a WhatsApp.
+  // ya lleguen a Google Calendar y a WhatsApp. Las que no se marcan
+  // se quedan en este aparato.
   const uploadToCloud = async () => {
     if (!data) return;
     setSyncing(true);
     setSyncMessage("");
     setSyncError("");
+    if (selectedIds.length === 0) {
+      setSyncError("Marca al menos una cita en la lista para subirla.");
+      setSyncing(false);
+      return;
+    }
     try {
-      const result = await uploadLocalAppointments(data);
+      const result = await uploadSelectedAppointments(data, selectedIds);
       let next = data;
       if (result.mapping.length > 0) {
         next = applyCloudIds(data, result.mapping);
@@ -459,21 +499,109 @@ export default function AjustesPage() {
           <p className="text-sm text-slate-600">
             Solo las citas que están en la nube llegan a Google Calendar y
             reciben la confirmación por WhatsApp. Ahora mismo tienes{" "}
-            <strong>{localOnlyAppointments(data).length} citas</strong> que
-            solo viven en este aparato.
+            <strong>{localAppts.length} citas</strong> que solo viven en
+            este aparato. Marca las que quieras subir y deja fuera las
+            que ya no van.
           </p>
+          {localAppts.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={syncing}
+                  onClick={() =>
+                    setSelectedIds(
+                      localAppts
+                        .filter((a) => a.status !== "cancelled")
+                        .map((a) => a.id)
+                    )
+                  }
+                >
+                  Seleccionar todas
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={syncing}
+                  onClick={() => setSelectedIds([])}
+                >
+                  Quitar selección
+                </Button>
+                <span className="self-center text-xs text-slate-500">
+                  {selectedIds.length} de {localAppts.length} marcadas
+                </span>
+              </div>
+              <ul className="space-y-2">
+                {localAppts.map((a) => {
+                  const cancelled = a.status === "cancelled";
+                  const checked = selectedIds.includes(a.id);
+                  return (
+                    <li key={a.id}>
+                      <label
+                        className={
+                          "flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-sm " +
+                          (cancelled
+                            ? "border-slate-200 bg-slate-50 text-slate-500"
+                            : "border-slate-300 bg-white")
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={syncing}
+                          onChange={(e) =>
+                            setSelectedIds((prev) =>
+                              e.target.checked
+                                ? [...prev, a.id]
+                                : prev.filter((id) => id !== a.id)
+                            )
+                          }
+                          className="mt-0.5 h-4 w-4 shrink-0"
+                        />
+                        <span>
+                          <span className="font-medium">
+                            {contactName(data, a.contact_id)}
+                          </span>{" "}
+                          · {fmtDate(a.start_time)} · {fmtTime(a.start_time)}–
+                          {fmtTime(a.end_time)}
+                          <span className="block text-xs text-slate-500">
+                            {serviceName(data, a.service_id)} ·{" "}
+                            {doctorName(data, a.doctor_id) || "Sin asignar"}{" "}
+                            · {STATUS_LABEL[a.status]}
+                          </span>
+                          {cancelled && (
+                            <span className="block text-xs font-medium text-red-700">
+                              Cancelada — no vale la pena subirla.
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={uploadToCloud} disabled={syncing || localOnlyAppointments(data).length === 0}>
-              {syncing ? "Sincronizando…" : "Subir mis citas locales a la nube"}
+            <Button
+              onClick={uploadToCloud}
+              disabled={syncing || selectedIds.length === 0}
+            >
+              {syncing
+                ? "Sincronizando…"
+                : `Subir ${selectedIds.length > 0 ? `${selectedIds.length} ` : ""}citas marcadas a la nube`}
             </Button>
             <Button variant="outline" onClick={downloadFromCloud} disabled={syncing}>
               {syncing ? "Sincronizando…" : "Bajar citas de la nube"}
             </Button>
           </div>
           <p className="text-xs text-slate-500">
-            Al subir, las citas quedan también en la nube con su mismo
-            estado; nada se borra de este aparato. Al bajar, las citas de
-            la nube se agregan a las de aquí, sin duplicar.
+            Al subir, solo las citas marcadas quedan también en la nube
+            con su mismo estado; nada se borra de este aparato. Al bajar,
+            las citas de la nube se agregan a las de aquí, sin duplicar.
           </p>
         </CardContent>
       </Card>

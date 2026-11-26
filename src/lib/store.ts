@@ -511,3 +511,16 @@ export function setStatus(
   saveStore(next);
   return next;
 }
+
+/** Borra una cita del aparato (localStorage). No toca contactos ni
+ *  servicios: solo desaparece la cita. Si la cita también vive en
+ *  la nube, hay que borrarla allá con DELETE /api/appointments/delete
+ *  antes o después; esta función solo quita la copia local. */
+export function deleteAppointment(data: StoreData, id: string): StoreData {
+  const next: StoreData = {
+    ...data,
+    appointments: data.appointments.filter((a) => a.id !== id),
+  };
+  saveStore(next);
+  return next;
+}
