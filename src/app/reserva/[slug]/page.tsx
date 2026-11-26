@@ -134,6 +134,10 @@ export default function ReservaPage({
           time,
           doctor_id: doctorId || null,
           doctor_name: doctor?.name ?? null,
+          // La duración del servicio en este aparato: si en la nube
+          // no existe un servicio con ese nombre, el servidor usa
+          // esta duración y no adivina 45 min.
+          duration_minutes: service?.duration_minutes ?? null,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {

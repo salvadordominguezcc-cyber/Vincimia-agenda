@@ -35,11 +35,32 @@ export async function resolveOrgBySlug(
   return (data as CloudOrg | null) ?? null;
 }
 
+/** Duración que un cliente puede mandar (la de su servicio local):
+ *  solo se acepta un entero entre 15 y 120 minutos. Cualquier otro
+ *  valor se ignora y se usa la duración de la nube o 45 min. */
+export function validClientDuration(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(n) || n < 15 || n > 120) return null;
+  return n;
+}
+
+/** Nombre sin acentos y en minúsculas, para comparar servicios
+ *  aunque uno diga "Valoracion" y el otro "Valoración". */
+function normalizeServiceName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export async function resolveService(
   supabase: SupabaseClient,
   organizationId: string,
-  serviceName: string
+  serviceName: string,
+  clientDurationMinutes?: number | null
 ): Promise<{ id: string | null; duration_minutes: number; price: number }> {
+  const fallbackDuration = validClientDuration(clientDurationMinutes) ?? 45;
   const { data } = await supabase
     .from("services")
     .select("id, duration_minutes, price")
@@ -47,12 +68,33 @@ export async function resolveService(
     .eq("name", serviceName)
     .eq("active", true)
     .single();
-  if (!data) return { id: null, duration_minutes: 45, price: 0 };
-  return {
-    id: (data as { id: string }).id,
-    duration_minutes: (data as { duration_minutes: number }).duration_minutes ?? 45,
-    price: Number((data as { price: number }).price ?? 0),
-  };
+  if (data) {
+    return {
+      id: (data as { id: string }).id,
+      duration_minutes: (data as { duration_minutes: number }).duration_minutes ?? 45,
+      price: Number((data as { price: number }).price ?? 0),
+    };
+  }
+  // Sin coincidencia exacta: probar sin acentos y sin mayúsculas
+  // ("Valoracion" = "Valoración"). Si tampoco hay, usar la duración
+  // que mandó el cliente cuando sea válida; si no, 45 min como antes.
+  // Nunca se rompe por un servicio que no existe en la nube.
+  const { data: all } = await supabase
+    .from("services")
+    .select("id, name, duration_minutes, price")
+    .eq("organization_id", organizationId)
+    .eq("active", true);
+  const hit = (all ?? []).find(
+    (s) => normalizeServiceName((s as { name: string }).name) === normalizeServiceName(serviceName)
+  );
+  if (hit) {
+    return {
+      id: (hit as { id: string }).id,
+      duration_minutes: (hit as { duration_minutes: number }).duration_minutes ?? 45,
+      price: Number((hit as { price: number }).price ?? 0),
+    };
+  }
+  return { id: null, duration_minutes: fallbackDuration, price: 0 };
 }
 
 const UUID_RE =

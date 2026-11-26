@@ -1,7 +1,12 @@
 // Reserva pública en la nube — Vincimia Agenda.
 // POST /api/appointments/create
 //   { slug, client_name, client_phone, service_name, date, time,
-//     doctor_id?, doctor_name?, notes? }
+//     doctor_id?, doctor_name?, notes?, duration_minutes? }
+// duration_minutes (opcional, 15-120) es la duración del servicio
+// en el aparato del cliente: si el servicio no existe en la nube
+// con ese nombre, se usa esa duración en vez de adivinar 45 min
+// (una "Valoracion" local de 30 min no debe chocar con el descanso
+// por un 45 min inventado).
 // La usa el link público (/reserva/[slug]) para que la cita nazca
 // YA en Supabase: así al confirmarla en el panel sí llega a Google
 // Calendar y sí se manda la confirmación por WhatsApp (antes la cita
@@ -78,6 +83,13 @@ export async function POST(req: Request) {
   const doctorId = body.doctor_id ? String(body.doctor_id) : null;
   const doctorName = body.doctor_name ? String(body.doctor_name) : null;
   const notes = body.notes ? String(body.notes) : null;
+  const durationMinutes =
+    typeof body.duration_minutes === "number" &&
+    Number.isInteger(body.duration_minutes) &&
+    body.duration_minutes >= 15 &&
+    body.duration_minutes <= 120
+      ? body.duration_minutes
+      : null;
   if (!slug || !clientName || !serviceName || !DATE_RE.test(date) || !TIME_RE.test(time)) {
     return Response.json(
       { ok: false, message: "Faltan el negocio, el nombre, el servicio, la fecha o la hora." },
@@ -88,7 +100,7 @@ export async function POST(req: Request) {
   if (!org) {
     return Response.json({ ok: false, message: "Negocio no encontrado." }, { status: 404 });
   }
-  const service = await resolveService(supabase, org.id, serviceName);
+  const service = await resolveService(supabase, org.id, serviceName, durationMinutes);
   const doctor = await resolveDoctor(supabase, org.id, doctorId, doctorName);
   const startISO = `${date}T${time}:00`;
   const { clash, inBreak } = await checkCloudOverlap(
