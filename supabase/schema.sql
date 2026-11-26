@@ -249,6 +249,12 @@ INSERT INTO contacts (id, organization_id, full_name, phone) VALUES
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', '11111111-1111-1111-1111-111111111111', 'Mariana Torres', '+52 686 222 3344')
 ON CONFLICT (id) DO NOTHING;
 
+-- Doctores de ejemplo. Colores por especialidad (regla 2026-11-26):
+-- rojo general, morado ortodoncia, turquesa endodoncia. Los colores
+-- propios de cada doctor real (Jaqueline amarillo, Jared naranja,
+-- Javier azul, Jimena morado, Lilian rosa, Gerardo verde, Beltrán
+-- gris, Liz salmón) se ponen solos al darlo de alta por su nombre
+-- (doctorColorForDoctor en src/lib/types.ts).
 INSERT INTO doctors (id, organization_id, name, specialty, color, requires_deposit, schedule) VALUES
   ('a1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Dra. Ana López', 'general', '#dc2626', false, '[{"weekday":1,"start":"09:00","end":"18:00","active":true},{"weekday":2,"start":"09:00","end":"18:00","active":true},{"weekday":3,"start":"09:00","end":"18:00","active":true},{"weekday":4,"start":"09:00","end":"18:00","active":true},{"weekday":5,"start":"09:00","end":"18:00","active":true},{"weekday":6,"start":"09:00","end":"14:00","active":true}]'::jsonb),
   ('a2222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Dr. Carlos Ruiz', 'ortodoncia_general', '#7c3aed', false, '[{"weekday":1,"start":"10:00","end":"19:00","active":true},{"weekday":2,"start":"10:00","end":"19:00","active":true},{"weekday":3,"start":"10:00","end":"19:00","active":true},{"weekday":4,"start":"10:00","end":"19:00","active":true},{"weekday":5,"start":"10:00","end":"19:00","active":true}]'::jsonb),

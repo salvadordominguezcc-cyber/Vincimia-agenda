@@ -62,8 +62,18 @@ export interface Doctor {
   created_at: string;
 }
 
-/** Colores para elegir al crear un doctor (paleta con buen contraste). */
+/** Colores para elegir al crear un doctor (paleta con buen contraste).
+ *  Incluye los colores reales de la clínica (Google Calendar, 2026-11-26). */
 export const DOCTOR_COLORS = [
+  "#dc2626",
+  "#facc15",
+  "#fb923c",
+  "#60a5fa",
+  "#a78bfa",
+  "#e879f9",
+  "#4ade80",
+  "#9ca3af",
+  "#fda4af",
   "#2563eb",
   "#059669",
   "#7c3aed",
@@ -71,7 +81,6 @@ export const DOCTOR_COLORS = [
   "#db2777",
   "#0891b2",
   "#65a30d",
-  "#dc2626",
 ];
 
 /** Color del doctor según la regla de la clínica (2026-11-26), el
@@ -85,6 +94,42 @@ export function doctorColorForSpecialty(specialty: DoctorSpecialty): string {
   if (specialty === "ortodoncia_general") return "#7c3aed";
   return "#dc2626";
 }
+
+/** Color propio de cada doctor real de la clínica, según su
+ *  calendario oficial de Google (captura de Salvador, 2026-11-26).
+ *  Se usa como color inicial al dar de alta al doctor por su nombre;
+ *  después se puede cambiar a mano en Doctores. Si el nombre no es
+ *  uno de los reales, cae al color de su especialidad. */
+const REAL_DOCTOR_COLORS: { match: RegExp; color: string }[] = [
+  { match: /jaqueline/, color: "#facc15" }, // Dra. Jaqueline Orto — amarillo
+  { match: /jared/, color: "#fb923c" }, // Dr. Jared cirugías — naranja
+  { match: /javier/, color: "#60a5fa" }, // Dr. Javier Orto — azul
+  { match: /jimena/, color: "#a78bfa" }, // Dra. Jimena general — morado
+  { match: /lilian/, color: "#e879f9" }, // Dra. Lilian general — rosa/magenta
+  { match: /gerardo/, color: "#4ade80" }, // Dr. Gerardo Orto — verde
+  { match: /beltr[aá]n/, color: "#9ca3af" }, // Dr. Beltrán Endo — gris
+  { match: /liz/, color: "#fda4af" }, // Dra. Liz Ramos Odontopediatra — salmón
+];
+
+export function doctorColorForDoctor(name: string, specialty: DoctorSpecialty): string {
+  const plain = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const found = REAL_DOCTOR_COLORS.find((r) => r.match.test(plain));
+  return found ? found.color : doctorColorForSpecialty(specialty);
+}
+
+/** Emoji de estado para los bloques del calendario (igual que en el
+ *  título de Google Calendar: 🟢 cita confirmada). */
+export const STATUS_EMOJI: Record<StatusType, string> = {
+  pending: "🟡",
+  confirmed: "🟢",
+  completed: "✅",
+  cancelled: "❌",
+  conflict: "⚠️",
+  on_hold: "⏸️",
+};
 
 export interface Organization {
   id: string;

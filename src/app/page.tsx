@@ -54,7 +54,7 @@ export default function Home() {
             Vincimia Agenda
           </Link>
           <nav className="flex items-center gap-2">
-            <Link href="/reserva/clinica-sonrisa">
+            <Link href="/reserva/clinica-dentiplus">
               <Button variant="ghost">Reservar cita</Button>
             </Link>
             <Link href="/login">
@@ -84,7 +84,7 @@ export default function Home() {
             <Link href="/login">
               <Button size="lg">Entrar al panel</Button>
             </Link>
-            <Link href="/reserva/clinica-sonrisa">
+            <Link href="/reserva/clinica-dentiplus">
               <Button size="lg" variant="outline">
                 Probar el link público
               </Button>

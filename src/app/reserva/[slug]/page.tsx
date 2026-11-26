@@ -21,6 +21,7 @@ import { Logo } from "@/components/Logo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { fetchPublicCatalog, mergeCatalogIntoStore } from "@/lib/cloud-sync";
 
 export default function ReservaPage({
   params,
@@ -43,14 +44,46 @@ export default function ReservaPage({
    *  Google Calendar ni se manda la confirmación por WhatsApp. */
   const [localOnly, setLocalOnly] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  /** true cuando ya se intentó traer el catálogo de la nube para
+   *  este enlace: hasta entonces no se dice "Negocio no encontrado",
+   *  porque el enlace real (clinica-dentiplus) solo vive en la nube
+   *  y en este aparato todavía está el demo. */
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
 
   useEffect(() => {
     const d = loadStore();
     setData(d);
     setServiceId(d.services[0]?.id ?? "");
+    // El link trae de la nube los servicios y doctores reales del
+    // negocio (y sus horarios y descanso), solo en memoria: no se
+    // escribe nada en el localStorage del paciente. Si no hay
+    // conexión, se sigue con lo del aparato como antes.
+    fetchPublicCatalog(params.slug)
+      .then((catalog) => {
+        if (!catalog || !catalog.org) return;
+        const merged = mergeCatalogIntoStore(loadStore(), catalog, false);
+        setData(merged);
+        setServiceId((prev) =>
+          merged.services.some((s) => s.id === prev)
+            ? prev
+            : merged.services[0]?.id ?? ""
+        );
+        setDoctorId((prev) =>
+          (merged.doctors ?? []).some((doc) => doc.id === prev) ? prev : ""
+        );
+      })
+      .catch(() => {
+        // Sin conexión se sigue con lo del aparato.
+      })
+      .finally(() => setCatalogLoaded(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!data) return <p className="p-6 text-slate-500">Cargando…</p>;
+
+  if (params.slug !== data.org.slug && !catalogLoaded) {
+    return <p className="p-6 text-slate-500">Cargando…</p>;
+  }
 
   if (params.slug !== data.org.slug) {
     return (
@@ -61,8 +94,8 @@ export default function ReservaPage({
             <p className="text-sm text-slate-500">
               El link <code>/reserva/{params.slug}</code> no corresponde a
               ningún negocio en este demo. Prueba con{" "}
-              <Link href="/reserva/clinica-sonrisa" className="text-brand-700 underline">
-                /reserva/clinica-sonrisa
+              <Link href="/reserva/clinica-dentiplus" className="text-brand-700 underline">
+                /reserva/clinica-dentiplus
               </Link>
               .
             </p>

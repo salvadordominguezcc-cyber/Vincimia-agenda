@@ -13,11 +13,13 @@ import { DoctorChip } from "@/components/DoctorChip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { loadStore, saveStore, type StoreData } from "@/lib/store";
-import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
+import { fetchCatalog, mergeCatalogIntoStore, saveDoctorToCloud } from "@/lib/cloud-sync";
+import { supabaseConfigured } from "@/lib/supabase";
 import {
   DOCTOR_COLORS,
   SPECIALTIES,
   SPECIALTY_LABEL,
+  doctorColorForDoctor,
   doctorColorForSpecialty,
   type Doctor,
   type DoctorScheduleDay,
@@ -83,7 +85,21 @@ export default function DoctoresPage() {
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   useEffect(() => {
-    setData(loadStore());
+    const d = loadStore();
+    setData(d);
+    // Al entrar, la nube manda: doctores con su color, especialidad
+    // y horarios reales. Los que solo viven en el aparato se conservan.
+    if (supabaseConfigured()) {
+      fetchCatalog(d.org.id, d.org.excel_webhook_secret)
+        .then((catalog) => {
+          const merged = mergeCatalogIntoStore(loadStore(), catalog);
+          setData(merged);
+        })
+        .catch(() => {
+          // Sin conexión a la nube se sigue con lo del aparato.
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!data) return <p className="text-slate-500">Cargando…</p>;
@@ -93,8 +109,9 @@ export default function DoctoresPage() {
     setName(doc ? doc.name : "");
     setSpecialty(doc ? doc.specialty : "general");
     // Al crear, el color arranca con el de la especialidad (rojo
-    // general, morado ortodoncia, turquesa endodoncia); se puede
-    // cambiar a mano después.
+    // general, morado ortodoncia, turquesa endodoncia); al escribir
+    // el nombre de un doctor real se pone su color oficial, y se
+    // puede cambiar a mano después.
     setColor(doc ? doc.color : doctorColorForSpecialty("general"));
     setRequiresDeposit(doc ? doc.requires_deposit : false);
     setSchedule(doc ? doc.schedule : defaultSchedule());
@@ -125,29 +142,29 @@ export default function DoctoresPage() {
     );
   };
 
-  const saveToCloud = async (doctor: Doctor, isNew: boolean) => {
+  const saveToCloud = async (doctor: Doctor, current: StoreData) => {
     if (!supabaseConfigured()) return true;
-    try {
-      const client = supabaseBrowser();
-      if (!client) return true;
-      const row = {
-        id: doctor.id,
-        organization_id: doctor.organization_id,
-        name: doctor.name,
-        specialty: doctor.specialty,
-        color: doctor.color,
-        requires_deposit: doctor.requires_deposit,
-        schedule: doctor.schedule,
-        active: doctor.active,
-      };
-      const { error } = isNew
-        ? await client.from("doctors").insert(row)
-        : await client.from("doctors").update(row).eq("id", doctor.id);
-      if (error) return false;
+    const result = await saveDoctorToCloud(current, doctor);
+    if (result.ok) {
+      const cloud = result.row?.doctor as Doctor | undefined;
+      if (cloud && cloud.id !== doctor.id) {
+        // La nube ya tenía a este doctor con otro id (mismo nombre):
+        // se adopta el id de la nube para no duplicarlo después.
+        const next: StoreData = {
+          ...current,
+          doctors: current.doctors.map((d) =>
+            d.id === doctor.id ? { ...d, id: cloud.id } : d
+          ),
+          appointments: current.appointments.map((a) =>
+            a.doctor_id === doctor.id ? { ...a, doctor_id: cloud.id } : a
+          ),
+        };
+        saveStore(next);
+        setData(next);
+      }
       return true;
-    } catch {
-      return false;
     }
+    return false;
   };
 
   const save = async (e: React.FormEvent) => {
@@ -190,7 +207,7 @@ export default function DoctoresPage() {
     saveStore(next);
     setData(next);
     setSaving(true);
-    const ok = await saveToCloud(doctor, isNew);
+    const ok = await saveToCloud(doctor, next);
     setSaving(false);
     setEditingId(null);
     setName("");
@@ -213,7 +230,7 @@ export default function DoctoresPage() {
     };
     saveStore(next);
     setData(next);
-    const ok = await saveToCloud(updated, false);
+    const ok = await saveToCloud(updated, next);
     setMessage(
       ok
         ? active
@@ -347,7 +364,13 @@ export default function DoctoresPage() {
               <label className="text-sm font-medium">Nombre *</label>
               <Input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setName(next);
+                  // Al escribir el nombre de un doctor real, el color
+                  // arranca con su color del calendario oficial.
+                  if (!editingId) setColor(doctorColorForDoctor(next, specialty));
+                }}
                 placeholder="Ejemplo: Dra. Ana López"
                 required
               />

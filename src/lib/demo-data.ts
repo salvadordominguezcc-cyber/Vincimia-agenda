@@ -72,8 +72,14 @@ function weekdaySchedule(
 }
 
 // Doctores de ejemplo — las 5 especialidades que dio Salvador.
-// Color según la regla de la clínica (2026-11-26), igual que en
-// Google Calendar: rojo general, morado ortodoncia, turquesa endodoncia.
+// Doctores de ejemplo. Color según la regla de la clínica (2026-11-26),
+// igual que en Google Calendar: rojo general, morado ortodoncia,
+// turquesa endodoncia. Los colores propios de cada doctor real
+// (Dra. Jaqueline amarillo, Dr. Jared naranja, Dr. Javier azul,
+// Dra. Jimena morado, Dra. Lilian rosa, Dr. Gerardo verde,
+// Dr. Beltrán gris, Dra. Liz salmón) viven en doctorColorForDoctor()
+// en src/lib/types.ts y se ponen solos al dar de alta al doctor por
+// su nombre en Doctores.
 export const DEMO_DOCTORS: Doctor[] = [
   {
     id: "a1111111-1111-1111-1111-111111111111",

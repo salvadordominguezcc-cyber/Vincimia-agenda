@@ -29,12 +29,12 @@ import {
   setStatus,
   type StoreData,
 } from "@/lib/store";
-import { DoctorChip } from "@/components/DoctorChip";
+import { DoctorChip, textOnColor } from "@/components/DoctorChip";
 import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
 import { notifyAppointmentStatus } from "@/lib/notify-channels";
 import { isCloudId, syncDown } from "@/lib/cloud-sync";
 import { supabaseConfigured } from "@/lib/supabase";
-import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
+import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_EMOJI, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
 import { CalendarCheck, CheckCircle2, Trash2, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +101,14 @@ function mondayOf(d: Date): Date {
 function minutesOf(iso: string): number {
   const [h, m] = iso.slice(11, 16).split(":").map(Number);
   return h * 60 + m;
+}
+
+// Teléfono listo para llamar o escribir por WhatsApp: solo dígitos,
+// con 52 delante cuando es un celular mexicano de 10 dígitos.
+function phoneDigits(phone: string | null): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (digits.length === 10) return `52${digits}`;
+  return digits;
 }
 
 const dayName = new Intl.DateTimeFormat("es-MX", { weekday: "short" });
@@ -503,7 +511,31 @@ export default function CalendarioPage() {
               })()}
             </p>
             <p>
-              <strong>Teléfono:</strong> {contactPhone(data, selected.contact_id) || "—"}
+              <strong>Teléfono:</strong>{" "}
+              {(() => {
+                const phone = contactPhone(data, selected.contact_id);
+                if (!phone) return "—";
+                const digits = phoneDigits(phone);
+                return (
+                  <>
+                    <a
+                      className="font-medium text-brand-700 underline"
+                      href={`tel:+${digits}`}
+                    >
+                      {phone}
+                    </a>
+                    {" · "}
+                    <a
+                      className="font-medium text-emerald-700 underline"
+                      href={`https://wa.me/${digits}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      WhatsApp
+                    </a>
+                  </>
+                );
+              })()}
               {selected.promoter_id && (
                 <> · <strong>Promotor:</strong> {promoterName(data, selected.promoter_id)}</>
               )}
@@ -724,16 +756,18 @@ export default function CalendarioPage() {
                       </div>
                     );
                   })()}
+                  {/* Bloque de cita estilo Google Calendar: fondo sólido
+                      con el color del doctor y el texto extendido en
+                      varias líneas — "Nombre teléfono/ tratamiento" —
+                      para leerse de un vistazo sin abrir el detalle. */}
                   {placed.map(({ appt, col, cols }) => {
-                    const c = SOURCE_COLOR[appt.source];
                     const doc = doctorById(data, appt.doctor_id);
-                    const blockStyle = doc
-                      ? {
-                          backgroundColor: `${doc.color}26`,
-                          borderLeftColor: doc.color,
-                          color: "#1e293b",
-                        }
-                      : undefined;
+                    // Sin doctor asignado: rojo, el color de Particular
+                    // con doctor general (regla de la clínica).
+                    const bg = doc ? doc.color : "#dc2626";
+                    const fg = textOnColor(bg);
+                    const phone = contactPhone(data, appt.contact_id);
+                    const svc = serviceName(data, appt.service_id);
                     const startMin = minutesOf(appt.start_time);
                     const endMin = minutesOf(appt.end_time);
                     const top = Math.max(0, ((startMin - FIRST_HOUR * 60) / 60) * HOUR_PX);
@@ -742,6 +776,8 @@ export default function CalendarioPage() {
                       ((endMin - startMin) / 60) * HOUR_PX - 2
                     );
                     const first = isFirstVisit(data, appt);
+                    const emoji = STATUS_EMOJI[appt.status];
+                    const short = height < 44;
                     return (
                       <button
                         key={appt.id}
@@ -754,12 +790,10 @@ export default function CalendarioPage() {
                           setDeleteError("");
                         }}
                         className={cn(
-                          "absolute overflow-hidden rounded-md border-l-4 px-1.5 py-1 text-left",
-                          !doc && c.bg,
-                          !doc && c.border,
-                          !doc && c.text,
-                          appt.status === "cancelled" && "opacity-50 line-through",
-                          appt.status === "conflict" && "border-dashed border-red-500",
+                          "absolute overflow-hidden rounded-md px-1.5 py-1 text-left",
+                          appt.status === "cancelled" && "opacity-60 line-through",
+                          appt.status === "conflict" &&
+                            "border-2 border-dashed border-red-700",
                           selectedId === appt.id && "ring-2 ring-slate-900"
                         )}
                         style={{
@@ -767,51 +801,45 @@ export default function CalendarioPage() {
                           height,
                           left: `calc(${(col / cols) * 100}% + 2px)`,
                           width: `calc(${100 / cols}% - 4px)`,
-                          ...blockStyle,
+                          backgroundColor: bg,
+                          color: fg,
                         }}
                       >
-                        <p className="truncate text-xs font-bold leading-tight">
-                          {fmtTime(appt.start_time)} {contactName(data, appt.contact_id)}
-                        </p>
-                        {height >= 44 && (
+                        {short ? (
+                          <p className="truncate text-xs font-bold leading-tight">
+                            {fmtTime(appt.start_time)} {emoji}{" "}
+                            {contactName(data, appt.contact_id)}
+                          </p>
+                        ) : (
                           <>
-                            <p className="truncate text-[11px] leading-tight">
-                              {serviceName(data, appt.service_id)}
+                            <p className="text-xs font-bold leading-snug break-words">
+                              {fmtTime(appt.start_time)} {emoji}{" "}
+                              {contactName(data, appt.contact_id)}
                             </p>
-                            <p className="truncate text-[11px] leading-tight">
-                              {doc ? (
-                                <DoctorChip
-                                  name={doctorName(data, appt.doctor_id)}
-                                  color={doc.color}
-                                />
-                              ) : (
-                                <span className="opacity-80">{c.label}</span>
-                              )}
+                            <p className="text-[11px] leading-snug break-words">
+                              {phone ? `${phone} / ` : ""}
+                              {svc}
                             </p>
-                            <span
-                              className={cn(
-                                "mt-0.5 inline-block rounded-full px-1.5 py-px text-[10px] font-medium",
-                                first
-                                  ? "bg-emerald-600 text-white"
-                                  : "bg-slate-600 text-white"
-                              )}
-                            >
-                              {first ? "Primera vez" : "Ya había venido"}
-                            </span>
+                            <p className="text-[11px] leading-snug break-words opacity-90">
+                              {doc
+                                ? doctorName(data, appt.doctor_id)
+                                : "Sin asignar"}
+                            </p>
+                            {height >= 64 && (
+                              <span
+                                className="mt-0.5 inline-block rounded-full px-1.5 py-px text-[10px] font-medium"
+                                style={{
+                                  backgroundColor: "rgba(0,0,0,0.28)",
+                                  color: fg,
+                                }}
+                              >
+                                {first ? "Primera vez" : "Ya había venido"}
+                              </span>
+                            )}
                           </>
                         )}
-                        {height < 44 && (
-                          <span
-                            className={cn(
-                              "mt-0.5 inline-block rounded-full px-1.5 py-px text-[10px] font-medium",
-                              first ? "bg-emerald-600 text-white" : "bg-slate-600 text-white"
-                            )}
-                          >
-                            {first ? "1ª vez" : "Ya vino"}
-                          </span>
-                        )}
                         {appt.status === "conflict" && (
-                          <p className="text-[11px] font-bold text-red-700">Conflicto</p>
+                          <p className="text-[11px] font-bold">⚠️ Conflicto</p>
                         )}
                       </button>
                     );

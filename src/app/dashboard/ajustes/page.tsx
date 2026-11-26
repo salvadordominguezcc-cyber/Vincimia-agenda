@@ -4,12 +4,10 @@
 // connected_google_email) solo viven dentro del código y en Supabase.
 //
 // Qué hace al guardar: actualiza el negocio aquí mismo (localStorage)
-// para que el cambio se vea de inmediato, y también en Supabase cuando
-// hay sesión. Las reglas de Supabase ya permiten que un miembro del
-// negocio actualice sus datos y borre sus filas (ver supabase/schema.sql:
-// "org_update_members" y las reglas de promotores/servicios/contactos/
-// citas); no hace falta ninguna regla nueva, solo que el usuario ya
-// tenga su acceso, que el panel crea solo al entrar (ensureMembership).
+// para que el cambio se vea de inmediato, y también en la nube por la
+// ruta /api/catalog/org (con el secreto del negocio, como las citas).
+// Al entrar, los datos de la nube mandan: nombre, enlace, tiempo entre
+// citas, descanso y correo de Google vienen de Supabase.
 // Al borrar los datos de ejemplo NO se borra el negocio ni la cuenta.
 
 "use client";
@@ -31,10 +29,16 @@ import {
   type StoreData,
 } from "@/lib/store";
 import {
+  applyCatalogIds,
   applyCloudIds,
+  fetchCatalog,
   fetchCloudAppointments,
+  isCloudId,
   localOnlyAppointments,
+  mergeCatalogIntoStore,
   mergeCloudIntoStore,
+  saveOrgToCloud,
+  uploadCatalogToCloud,
   uploadSelectedAppointments,
 } from "@/lib/cloud-sync";
 import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
@@ -65,6 +69,10 @@ export default function AjustesPage() {
   // canceladas (esas no vale la pena subirlas). Las canceladas se
   // pueden marcar a mano si de verdad se quieren subir.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Subir servicios y doctores que solo viven en este aparato.
+  const [catalogSyncing, setCatalogSyncing] = useState(false);
+  const [catalogSyncMessage, setCatalogSyncMessage] = useState("");
+  const [catalogSyncError, setCatalogSyncError] = useState("");
 
   useEffect(() => {
     const d = loadStore();
@@ -75,6 +83,26 @@ export default function AjustesPage() {
     setBreakStart(d.org.break_start ?? "");
     setBreakEnd(d.org.break_end ?? "");
     setGoogleEmail(d.org.connected_google_email ?? "");
+    // Al entrar, los datos del negocio y el catálogo de la nube
+    // mandan: si en la nube cambió el nombre, el enlace, el descanso
+    // o hay servicios/doctores nuevos, se ven aquí sin duplicar.
+    if (supabaseConfigured()) {
+      fetchCatalog(d.org.id, d.org.excel_webhook_secret)
+        .then((catalog) => {
+          const merged = mergeCatalogIntoStore(loadStore(), catalog);
+          setData(merged);
+          setName(merged.org.name);
+          setLink(merged.org.slug);
+          setGap(String(merged.org.buffer_minutes));
+          setBreakStart(merged.org.break_start ?? "");
+          setBreakEnd(merged.org.break_end ?? "");
+          setGoogleEmail(merged.org.connected_google_email ?? "");
+        })
+        .catch(() => {
+          // Sin conexión a la nube se sigue con lo del aparato.
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Las citas marcadas siguen a la lista de locales: las nuevas que
@@ -109,6 +137,10 @@ export default function AjustesPage() {
   const hasDemoData =
     counts.citas + counts.clientes + counts.servicios + counts.promotores + counts.doctores > 0;
   const localAppts = localOnlyAppointments(data);
+  // Servicios y doctores que solo viven en este aparato (sin id de
+  // la nube): son los que faltan por subir para que el link los vea.
+  const localServices = data.services.filter((s) => !isCloudId(s.id));
+  const localDoctors = (data.doctors ?? []).filter((d) => !isCloudId(d.id));
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +156,7 @@ export default function AjustesPage() {
     }
     if (!LINK_RE.test(cleanLink)) {
       setError(
-        "El enlace solo puede tener letras minúsculas, números y guiones. Ejemplo: clinica-sonrisa"
+        "El enlace solo puede tener letras minúsculas, números y guiones. Ejemplo: clinica-dentiplus"
       );
       return;
     }
@@ -162,31 +194,25 @@ export default function AjustesPage() {
     setData(next);
     setGap(String(gapMinutes));
 
-    // 2) Se guarda también en la nube, cuando hay sesión.
+    // 2) Se guarda también en la nube, por la ruta del servidor (con
+    // el secreto del negocio, como las citas): así no depende de las
+    // reglas del navegador y el link usa los mismos datos.
     if (!supabaseConfigured()) {
       setMessage("Listo, ya se guardaron los datos de tu negocio.");
       return;
     }
     setSaving(true);
     try {
-      const client = supabaseBrowser();
-      if (!client) {
-        setMessage("Listo, ya se guardaron los datos de tu negocio.");
-        return;
-      }
-      const { error: updateError } = await client
-        .from("organizations")
-        .update({
-          name: cleanName,
-          slug: cleanLink,
-          buffer_minutes: gapMinutes,
-          break_start: cleanBreakStart || null,
-          break_end: cleanBreakEnd || null,
-          connected_google_email: cleanEmail || null,
-        })
-        .eq("id", data.org.id);
-      if (updateError) {
-        if (updateError.code === "23505") {
+      const result = await saveOrgToCloud(next, {
+        name: cleanName,
+        slug: cleanLink,
+        buffer_minutes: gapMinutes,
+        break_start: cleanBreakStart || null,
+        break_end: cleanBreakEnd || null,
+        connected_google_email: cleanEmail || null,
+      });
+      if (!result.ok) {
+        if (String(result.message).includes("ya lo usa otro negocio")) {
           setError(
             "Ese enlace ya lo usa otro negocio, prueba con otro. Los demás datos sí quedaron guardados aquí."
           );
@@ -261,6 +287,38 @@ export default function AjustesPage() {
       setSyncError(`No se pudo bajar: ${String(e)}. Revisa tu conexión e inténtalo de nuevo.`);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // Sube a la nube los servicios y doctores que solo viven en este
+  // aparato (los que todavía no tienen id de la nube). No borra nada:
+  // si en la nube ya existe uno con el mismo nombre, se actualiza en
+  // vez de duplicarse, y aquí se le pone su id de la nube.
+  const uploadCatalog = async () => {
+    if (!data) return;
+    setCatalogSyncing(true);
+    setCatalogSyncMessage("");
+    setCatalogSyncError("");
+    try {
+      const result = await uploadCatalogToCloud(data);
+      const next = applyCatalogIds(data, result);
+      if (next !== data) setData(next);
+      const serviceCount = result.services.created + result.services.updated;
+      const doctorCount = result.doctors.created + result.doctors.updated;
+      const parts = [];
+      if (serviceCount > 0) parts.push(`${serviceCount} servicios`);
+      if (doctorCount > 0) parts.push(`${doctorCount} doctores`);
+      if (parts.length === 0) {
+        setCatalogSyncMessage("Ya estabas al día: no había nada que subir.");
+      } else {
+        setCatalogSyncMessage(`Listo: se subieron ${parts.join(" y ")} a la nube.`);
+      }
+      const errors = [...result.services.errors, ...result.doctors.errors];
+      if (errors.length > 0) setCatalogSyncError(errors.slice(0, 3).join(" "));
+    } catch (e) {
+      setCatalogSyncError(`No se pudo subir: ${String(e)}. Revisa tu conexión e inténtalo de nuevo.`);
+    } finally {
+      setCatalogSyncing(false);
     }
   };
 
@@ -369,7 +427,7 @@ export default function AjustesPage() {
                       .replace(/[^a-z0-9-]/g, "")
                   )
                 }
-                placeholder="Ejemplo: clinica-sonrisa"
+                placeholder="Ejemplo: clinica-dentiplus"
                 required
               />
               <p className="mt-1 text-xs text-slate-500">
@@ -603,6 +661,42 @@ export default function AjustesPage() {
             con su mismo estado; nada se borra de este aparato. Al bajar,
             las citas de la nube se agregan a las de aquí, sin duplicar.
           </p>
+
+          <div className="border-t border-slate-200 pt-3">
+            {catalogSyncMessage && (
+              <p className="mb-2 rounded-lg bg-green-50 p-3 text-sm text-green-800">
+                {catalogSyncMessage}
+              </p>
+            )}
+            {catalogSyncError && (
+              <p className="mb-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                {catalogSyncError}
+              </p>
+            )}
+            <p className="text-sm text-slate-600">
+              Los servicios y doctores también se guardan solos en la
+              nube cuando los agregas o editas. Si alguno solo vive en
+              este aparato, súbelo aquí:{" "}
+              <strong>
+                {localServices.length} servicios y {localDoctors.length}{" "}
+                doctores
+              </strong>{" "}
+              por subir.
+            </p>
+            <Button
+              className="mt-2"
+              variant="outline"
+              onClick={uploadCatalog}
+              disabled={
+                catalogSyncing ||
+                localServices.length + localDoctors.length === 0
+              }
+            >
+              {catalogSyncing
+                ? "Sincronizando…"
+                : "Subir servicios y doctores a la nube"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

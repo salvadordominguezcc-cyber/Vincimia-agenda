@@ -48,12 +48,12 @@ export default function DashboardLayout({
   const [email, setEmail] = useState<string | null>(null);
   // Enlace actual del negocio (cambia en Ajustes); si aún no se ha
   // cargado, se usa el de ejemplo.
-  const [orgSlug, setOrgSlug] = useState("clinica-sonrisa");
+  const [orgSlug, setOrgSlug] = useState("clinica-dentiplus");
   const demo = !supabaseConfigured();
 
   useEffect(() => {
     try {
-      setOrgSlug(loadStore().org.slug || "clinica-sonrisa");
+      setOrgSlug(loadStore().org.slug || "clinica-dentiplus");
     } catch {
       // Se queda el de ejemplo.
     }
