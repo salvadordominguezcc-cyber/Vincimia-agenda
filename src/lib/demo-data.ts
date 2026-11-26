@@ -49,6 +49,8 @@ export const DEMO_ORG: Organization = {
   google_calendar_sync: false,
   connected_google_email: null,
   google_calendar_id: "primary",
+  // Sin link inventado: el dueño lo pone en Dashboard → Reseñas.
+  google_review_url: null,
   excel_webhook_secret: "demo-secreto-sheets-cambiar-en-supabase",
   created_at: new Date().toISOString(),
 };
@@ -137,6 +139,13 @@ export const DEMO_SERVICES: Service[] = [
 export const DEMO_PROMOTERS: Promoter[] = [
   { id: "prom-carlos", organization_id: DEMO_ORG_ID, name: "Carlos M.", code: "CARLOS", phone: "+52 686 111 2233", commission_rate: 10, active: true, created_at: new Date().toISOString() },
   { id: "prom-ana", organization_id: DEMO_ORG_ID, name: "Ana R.", code: "ANA", phone: "+52 686 444 5566", commission_rate: 10, active: true, created_at: new Date().toISOString() },
+  // Promotores virtuales por defecto (migración 008 / lib
+  // virtual-promoters.ts): nombres y estilos de ejemplo, el dueño los
+  // cambia en Dashboard → Promotores. Un promotor por fanpage; los 3
+  // pasan al mismo WhatsApp del consultorio.
+  { id: "vprom-1", organization_id: DEMO_ORG_ID, name: "Promotor virtual 1", code: "PROMO1", phone: null, commission_rate: 10, active: true, created_at: new Date().toISOString(), is_virtual: true, persona: "Eres el promotor virtual de la fanpage de Facebook del consultorio. Hablas solo en español, con tono cálido y directo. Saludos breves, preguntas qué necesita el paciente y le explicas las promociones de bienvenida y la póliza particular. Siempre invitas a seguir por WhatsApp para agendar su cita.", channel: "facebook", fanpage_url: null },
+  { id: "vprom-2", organization_id: DEMO_ORG_ID, name: "Promotor virtual 2", code: "PROMO2", phone: null, commission_rate: 10, active: true, created_at: new Date().toISOString(), is_virtual: true, persona: "Eres el promotor virtual del Instagram del consultorio. Hablas solo en español, con tono alegre y mensajes breves. Vas al grano: promociones de bienvenida, póliza particular y el pase a WhatsApp para agendar la cita.", channel: "instagram", fanpage_url: null },
+  { id: "vprom-3", organization_id: DEMO_ORG_ID, name: "Promotor virtual 3", code: "PROMO3", phone: null, commission_rate: 10, active: true, created_at: new Date().toISOString(), is_virtual: true, persona: "Eres el promotor virtual de la fanpage de Facebook del consultorio. Hablas solo en español, con tono paciente y explicativo. Explicas con calma cómo obtener las promociones con la póliza particular y resuelves las dudas del paciente antes de pasarlo a WhatsApp para agendar.", channel: "facebook", fanpage_url: null },
 ];
 
 export const DEMO_CONTACTS: Contact[] = [

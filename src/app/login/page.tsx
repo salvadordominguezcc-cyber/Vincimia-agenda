@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ensureMembership, siteUrl } from "@/lib/auth";
 import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
+import { normalizeUsername, usernameValid } from "@/lib/username";
 
 type Mode = "login" | "registro" | "recuperar";
 
@@ -39,6 +40,9 @@ function LoginForm() {
         : "login"
   );
   const [email, setEmail] = useState("");
+  // En login, este campo es "Correo o nombre de usuario" (igual que el
+  // POS): si no tiene @, se resuelve a su correo con /api/users?username=.
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -97,25 +101,51 @@ function LoginForm() {
     // ese modo y exigirla bloqueaba el envío del enlace (bug reportado
     // 2026-11-18: "Escribe tu correo y tu contraseña." con solo el correo).
     const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
-    if (!emailValido) {
+    if (mode === "recuperar" && !emailValido) {
       setError("Escribe un correo válido.");
       return;
     }
     if (mode !== "recuperar" && !password) {
-      setError("Escribe tu correo y tu contraseña.");
+      setError("Escribe tu correo o usuario y tu contraseña.");
       return;
     }
     setBusy(true);
     try {
       if (mode === "login") {
+        // Entrar con correo o con nombre de usuario, igual que el POS.
+        // Si no tiene @, es un usuario: se resuelve a su correo con
+        // GET /api/users?username= (la ruta responde el mismo error
+        // genérico si no existe, sin revelar si existe).
+        let loginEmail = cleanEmail;
+        if (!cleanEmail.includes("@")) {
+          const name = normalizeUsername(cleanEmail);
+          if (!usernameValid(name)) {
+            setError("Correo, nombre de usuario o contraseña incorrectos. Revisa tus datos e inténtalo de nuevo.");
+            return;
+          }
+          const res = await fetch(`/api/users?username=${encodeURIComponent(name)}`);
+          if (!res.ok) {
+            setError("Correo, nombre de usuario o contraseña incorrectos. Revisa tus datos e inténtalo de nuevo.");
+            return;
+          }
+          const data = await res.json().catch(() => ({}));
+          if (!data.email) {
+            setError("Correo, nombre de usuario o contraseña incorrectos. Revisa tus datos e inténtalo de nuevo.");
+            return;
+          }
+          loginEmail = String(data.email).toLowerCase();
+        } else if (!emailValido) {
+          setError("Escribe un correo válido o tu nombre de usuario.");
+          return;
+        }
         const { error: err } = await client.auth.signInWithPassword({
-          email: cleanEmail,
+          email: loginEmail,
           password,
         });
         if (err) {
           setError(
             err.message === "Invalid login credentials"
-              ? "Correo o contraseña incorrectos."
+              ? "Correo, nombre de usuario o contraseña incorrectos."
               : err.message
           );
           return;
@@ -123,14 +153,28 @@ function LoginForm() {
         await ensureMembership();
         router.replace(next);
       } else if (mode === "registro") {
+        if (!emailValido) {
+          setError("Escribe un correo válido.");
+          return;
+        }
         if (password.length < 6) {
           setError("La contraseña debe tener al menos 6 caracteres.");
+          return;
+        }
+        const cleanUsername = normalizeUsername(username);
+        if (cleanUsername && !usernameValid(cleanUsername)) {
+          setError("El nombre de usuario debe tener al menos 3 caracteres y solo puede usar letras, números, guion bajo (_) y punto (.), sin espacios.");
           return;
         }
         const { data, error: err } = await client.auth.signUp({
           email: cleanEmail,
           password,
-          options: { emailRedirectTo: `${siteUrl()}/login?aviso=confirmado` },
+          options: {
+            emailRedirectTo: `${siteUrl()}/login?aviso=confirmado`,
+            // Usuario opcional: queda como alias en user_metadata para
+            // entrar después con usuario + contraseña, igual que el POS.
+            data: cleanUsername ? { username: cleanUsername, role: "member" } : { role: "member" },
+          },
         });
         if (err) {
           setError(err.message);
@@ -195,16 +239,33 @@ function LoginForm() {
           )}
           <form onSubmit={submit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Correo *</label>
+              <label className="text-sm font-medium">
+                {mode === "login" ? "Correo o nombre de usuario *" : "Correo *"}
+              </label>
               <Input
-                type="email"
+                type={mode === "login" ? "text" : "email"}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@correo.com"
+                placeholder={mode === "login" ? "tu@correo.com o tu usuario, ej. recepcion1" : "tu@correo.com"}
                 required
-                autoComplete="email"
+                autoComplete={mode === "login" ? "username" : "email"}
               />
             </div>
+            {mode === "registro" && (
+              <div>
+                <label className="text-sm font-medium">Nombre de usuario (opcional)</label>
+                <Input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="ej. recepcion1 — para entrar con usuario, sin correo"
+                  autoComplete="username"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Si lo pones, podrás entrar con ese usuario y tu contraseña, igual que en el POS.
+                </p>
+              </div>
+            )}
             {mode !== "recuperar" && (
               <div>
                 <label className="text-sm font-medium">Contraseña *</label>

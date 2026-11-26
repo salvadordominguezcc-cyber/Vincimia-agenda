@@ -14,6 +14,7 @@ import {
   fmtTime,
   type StoreData,
 } from "./store";
+import { reviewRequestText } from "./reviews";
 import type { Appointment } from "./types";
 
 const dayFmt = new Intl.DateTimeFormat("es-MX", {
@@ -41,4 +42,38 @@ export function confirmationMessage(data: StoreData, appt: Appointment): string 
     text += " Te esperamos.";
   }
   return text;
+}
+
+/** Texto de solicitud de reseña al completar la cita, listo para mandar
+ *  por WhatsApp (o copiar a mano en modo demo). Mismo texto que la nube. */
+export function reviewRequestMessage(
+  data: StoreData,
+  appt: Appointment,
+  reviewUrl: string
+): string {
+  return reviewRequestText(
+    data.org.name,
+    contactName(data, appt.contact_id),
+    reviewUrl
+  );
+}
+
+/**
+ * Ventana de envío de cada canal, en palabras normales. Los 3 canales
+ * de Meta solo dejan mandar texto libre si la persona escribió en las
+ * últimas 24 horas; fuera de esa ventana hace falta plantilla
+ * (WhatsApp) o etiqueta de agente humano (Messenger / Instagram),
+ * que todavía no está implementada. Por eso /api/inbox/send puede
+ * fallar con el error de Meta aunque el canal esté conectado.
+ */
+export function sendWindowNote(
+  channel: "whatsapp" | "facebook" | "instagram"
+): string {
+  if (channel === "whatsapp") {
+    return "Texto libre solo si el paciente escribió en las últimas 24 horas; fuera de esa ventana se usa la plantilla aprobada.";
+  }
+  if (channel === "facebook") {
+    return "Messenger: texto libre solo si la persona escribió en las últimas 24 horas; fuera de esa ventana hace falta la etiqueta de agente humano.";
+  }
+  return "Instagram: texto libre solo si la persona escribió en las últimas 24 horas; fuera de esa ventana hace falta la etiqueta de agente humano.";
 }

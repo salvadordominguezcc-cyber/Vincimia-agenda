@@ -15,6 +15,11 @@
 // Si la fila choca con una cita existente, la columna F dirá "⚠️ Conflicto"
 // en rojo y la cita quedará registrada como conflicto en Vincimia Agenda.
 // Si está libre, dirá "🟢 Confirmado" y la cita nace en pendiente.
+//
+// DIRECCIÓN INVERSA (Agenda → hoja): es otro script, en otro proyecto
+// de Apps Script, pegado en la misma hoja:
+// scripts/apps-script-agenda-a-sheets.gs. Este archivo no se toca
+// para eso; solo se deja esta nota para no confundir las dos direcciones.
 // ============================================================================
 
 // --- CAMBIA ESTAS 3 LÍNEAS ---------------------------------------------------

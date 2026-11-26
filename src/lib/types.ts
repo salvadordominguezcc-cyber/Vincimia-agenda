@@ -84,9 +84,24 @@ export interface Organization {
   break_start: string | null;
   break_end: string | null;
   whatsapp_bot_enabled: boolean;
+  /** Bot de Messenger (Facebook) e Instagram por negocio, igual que
+   *  whatsapp_bot_enabled. Se activan en Conectores cuando cada canal
+   *  ya está autorizado en Meta (migración 009). */
+  messenger_bot_enabled?: boolean;
+  instagram_bot_enabled?: boolean;
+  /** Id de la página de Facebook y de la cuenta profesional de
+   *  Instagram del negocio. El webhook de cada canal usa este id para
+   *  saber a qué negocio llegó el mensaje (migración 009). */
+  meta_page_id?: string | null;
+  meta_instagram_id?: string | null;
   google_calendar_sync: boolean;
   connected_google_email: string | null;
   google_calendar_id: string;
+  /** Link "Escribir reseña" de la ficha de Google Business de la
+   *  clínica. null = el dueño aún no lo configuró (Dashboard → Reseñas).
+   *  Sin él, las calificaciones de 4–5 estrellas no pueden llegar a
+   *  Google Maps y solo queda el formulario privado. */
+  google_review_url: string | null;
   excel_webhook_secret: string;
   created_at: string;
 }
@@ -101,6 +116,73 @@ export interface Promoter {
   commission_rate: number;
   active: boolean;
   created_at: string;
+  /**
+   * Promotor virtual (agente de IA) o humano. Los humanos se dan de
+   * alta a mano; los virtuales se crean con nombre, persona y canal,
+   * y contestan desde su fanpage (Facebook / Instagram) para después
+   * pasar al paciente al WhatsApp único del consultorio.
+   * Extensión de la migración 008: no es otra tabla, es el mismo
+   * concepto de promotor con estos campos extra.
+   */
+  is_virtual?: boolean;
+  /** Estilo del agente virtual, en español. Lo escribe el dueño en el
+   *  panel; el cerebro de IA lo usa como instrucción de personalidad.
+   *  null en promotores humanos. */
+  persona?: string | null;
+  /** Canal principal del promotor virtual (su fanpage). Editable: un
+   *  mismo promotor puede atender su página de Facebook y su Instagram
+   *  vinculado. null en promotores humanos. "facebook" = Messenger de
+   *  la fanpage (no se usa un valor "messenger" aparte para no romper
+   *  las reglas CHECK de las migraciones 006 y 008); "instagram" =
+   *  mensajes directos de Instagram. */
+  channel?: VirtualPromoterChannel | null;
+  /** Link de la fanpage de Facebook del promotor virtual (opcional). */
+  fanpage_url?: string | null;
+}
+
+/** Canal por el que entra el paciente con un promotor virtual. */
+export type VirtualPromoterChannel = "facebook" | "instagram" | "whatsapp";
+
+export const CHANNEL_LABEL: Record<VirtualPromoterChannel, string> = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+};
+
+/** Estado de una conversación con un promotor virtual. */
+export type ConversationStatus =
+  | "conversando"
+  | "en_whatsapp"
+  | "cita_confirmada"
+  | "cita_completada"
+  | "sin_respuesta";
+
+export const CONVERSATION_STATUS_LABEL: Record<ConversationStatus, string> = {
+  conversando: "Conversando",
+  en_whatsapp: "Pasó a WhatsApp",
+  cita_confirmada: "Cita confirmada",
+  cita_completada: "Cita completada",
+  sin_respuesta: "Sin respuesta",
+};
+
+/**
+ * Conversación (paciente enviado) de un promotor virtual. Una fila por
+ * paciente y promotor: registra quién mandó a cada paciente, por qué
+ * canal, y en qué quedó la cita. La cita real vive en appointments
+ * con promoter_id; esta tabla es el embudo previo (la charla).
+ */
+export interface PromoterConversation {
+  id: string;
+  organization_id: string;
+  promoter_id: string;
+  channel: VirtualPromoterChannel;
+  patient_name: string | null;
+  patient_phone: string | null;
+  treatment: string | null;
+  status: ConversationStatus;
+  appointment_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Service {

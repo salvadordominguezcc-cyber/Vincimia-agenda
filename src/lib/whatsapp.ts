@@ -107,3 +107,22 @@ export async function sendWhatsAppConfirmation(
   const id = await sendWhatsAppText(to, text);
   return { messageId: id, via: "text" };
 }
+
+/** Envía la solicitud de reseña al completar una cita.
+ *  Plantilla opcional WHATSAPP_REVIEW_TEMPLATE_NAME (categoría Utility,
+ *  idioma es_MX, 3 huecos en orden: nombre del paciente, nombre del
+ *  negocio, link de calificación). Sin plantilla, texto libre — que solo
+ *  llega si el paciente escribió en las últimas 24 horas. */
+export async function sendWhatsAppReview(
+  to: string,
+  text: string,
+  templateParams: string[]
+): Promise<{ messageId: string; via: "template" | "text" }> {
+  const template = process.env.WHATSAPP_REVIEW_TEMPLATE_NAME?.trim();
+  if (template) {
+    const id = await sendWhatsAppTemplate(to, template, templateParams);
+    return { messageId: id, via: "template" };
+  }
+  const id = await sendWhatsAppText(to, text);
+  return { messageId: id, via: "text" };
+}

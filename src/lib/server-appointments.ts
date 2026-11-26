@@ -17,6 +17,12 @@ import {
   siteUrl,
   type AppointmentForGoogle,
 } from "./google";
+import {
+  normalizePhone,
+  sendWhatsAppReview,
+  whatsappConfigured,
+} from "./whatsapp";
+import { reviewRequestText, reviewUrlFor } from "./reviews";
 
 export interface OrgRow {
   id: string;
@@ -30,6 +36,7 @@ export interface OrgRow {
   google_calendar_id: string;
   google_refresh_token: string | null;
   whatsapp_bot_enabled: boolean;
+  google_review_url: string | null;
 }
 
 export interface ApptFull {
@@ -37,6 +44,7 @@ export interface ApptFull {
   organization_id: string;
   contact_id: string | null;
   service_id: string | null;
+  promoter_id: string | null;
   doctor_id: string | null;
   start_time: string;
   end_time: string;
@@ -61,7 +69,7 @@ export async function loadOrg(
   const { data } = await supabase
     .from("organizations")
     .select(
-      "id, name, slug, buffer_minutes, break_start, break_end, google_calendar_sync, connected_google_email, google_calendar_id, google_refresh_token, whatsapp_bot_enabled"
+      "id, name, slug, buffer_minutes, break_start, break_end, google_calendar_sync, connected_google_email, google_calendar_id, google_refresh_token, whatsapp_bot_enabled, google_review_url"
     )
     .eq("id", organizationId)
     .single();
@@ -141,6 +149,97 @@ export function confirmationTextCloud(
     text += " Te esperamos.";
   }
   return text;
+}
+
+/** Texto de solicitud de reseña al completar la cita (nube).
+ *  Mismo texto que en el modo demo (src/lib/messages.ts). */
+export function reviewRequestTextCloud(
+  orgName: string,
+  appt: ApptFull,
+  reviewUrl: string
+): string {
+  return reviewRequestText(orgName, appt.contactName, reviewUrl);
+}
+
+export interface ReviewRequestResult {
+  status: "queued" | "sent" | "failed" | "no_phone";
+  reason?: string;
+  messageId?: string;
+}
+
+/** Disparo de reseñas: al marcar una cita como completada, guarda la
+ *  solicitud en review_requests y, si WhatsApp está conectado y el bot
+ *  activado, manda el link de calificación al paciente.
+ *  Si WhatsApp NO está conectado, la solicitud queda en cola (status
+ *  "queued") con el motivo: nada se simula como enviado. Si la cita ya
+ *  tenía una solicitud enviada o en cola, no se vuelve a mandar.
+ *  Si la migración 007 aún no está aplicada, la inserción falla y se
+ *  devuelve el motivo sin romper el check-in. */
+export async function queueReviewRequest(
+  supabase: SupabaseClient,
+  org: OrgRow,
+  appt: ApptFull
+): Promise<ReviewRequestResult> {
+  const reviewUrl = reviewUrlFor(siteUrl(), org.slug, appt.id);
+  const { data: existing } = await supabase
+    .from("review_requests")
+    .select("id, status")
+    .eq("organization_id", org.id)
+    .eq("appointment_id", appt.id)
+    .in("status", ["queued", "sent"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    return {
+      status: existing.status as "queued" | "sent",
+      reason: "Ya había una solicitud para esta cita.",
+    };
+  }
+
+  const phone = normalizePhone(appt.contactPhone);
+  let result: ReviewRequestResult;
+  if (!org.whatsapp_bot_enabled) {
+    result = { status: "queued", reason: "El bot está apagado para este negocio." };
+  } else if (!whatsappConfigured()) {
+    result = { status: "queued", reason: "WhatsApp no configurado en el servidor." };
+  } else if (!phone) {
+    result = { status: "no_phone", reason: "El paciente no tiene teléfono guardado." };
+  } else {
+    try {
+      const text = reviewRequestTextCloud(org.name, appt, reviewUrl);
+      const sent = await sendWhatsAppReview(phone, text, [
+        appt.contactName,
+        org.name,
+        reviewUrl,
+      ]);
+      result = { status: "sent", messageId: sent.messageId };
+    } catch (e) {
+      result = { status: "failed", reason: `WhatsApp: ${String(e)}` };
+    }
+  }
+
+  const { error: insertError } = await supabase.from("review_requests").insert({
+    organization_id: org.id,
+    appointment_id: appt.id,
+    contact_id: appt.contact_id,
+    phone,
+    review_url: reviewUrl,
+    status: result.status,
+    whatsapp_message_id:
+      result.status === "sent" ? result.messageId : null,
+    error: result.status === "sent" ? null : result.reason,
+    sent_at: result.status === "sent" ? new Date().toISOString() : null,
+  });
+  if (insertError) {
+    // La cola no se pudo guardar (probable: falta aplicar la migración
+    // 007). El check-in ya se hizo; se avisa el motivo sin romper nada.
+    return {
+      status: result.status,
+      reason: `${result.status === "sent" ? "Enviada pero " : ""}No se pudo guardar en la cola de reseñas: ${insertError.message}`,
+    };
+  }
+  return result;
 }
 
 function toGoogleAppt(org: OrgRow, appt: ApptFull): AppointmentForGoogle {

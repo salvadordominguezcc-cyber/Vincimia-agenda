@@ -26,9 +26,14 @@ const NAV = [
   { href: "/dashboard/nueva", label: "Nueva cita" },
   { href: "/dashboard/doctores", label: "Doctores" },
   { href: "/dashboard/promotores", label: "Promotores" },
+  { href: "/dashboard/contenido", label: "Contenido" },
+  { href: "/dashboard/bandeja", label: "Bandeja" },
+  { href: "/dashboard/flujos", label: "Flujos" },
   { href: "/dashboard/servicios", label: "Servicios" },
+  { href: "/dashboard/usuarios", label: "Usuarios" },
   { href: "/dashboard/conectores", label: "Conectores" },
   { href: "/dashboard/link", label: "Link público" },
+  { href: "/dashboard/resenas", label: "Reseñas" },
   { href: "/dashboard/ajustes", label: "Ajustes" },
 ];
 

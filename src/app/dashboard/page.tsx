@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DoctorChip } from "@/components/DoctorChip";
-import { confirmationMessage } from "@/lib/messages";
+import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
 import { notifyAppointmentStatus } from "@/lib/notify-channels";
 import { supabaseConfigured } from "@/lib/supabase";
 import {
@@ -44,6 +44,9 @@ export default function AgendaPage() {
   const [proposal, setProposal] = useState<Record<string, string>>({});
   const [holdError, setHoldError] = useState("");
   const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [lastMessageKind, setLastMessageKind] = useState<"confirmacion" | "resena">(
+    "confirmacion"
+  );
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -74,6 +77,20 @@ export default function AgendaPage() {
       const appt = next.appointments.find((a) => a.id === id);
       if (appt) {
         setLastMessage(confirmationMessage(next, appt));
+        setLastMessageKind("confirmacion");
+        setCopied(false);
+      }
+    }
+    // Al completar (check-in) se arma el mensaje de solicitud de reseña
+    // con su link de calificación, para copiarlo a mano en modo demo.
+    // En la nube, la ruta /api/appointments/status lo manda por WhatsApp
+    // (o lo deja en cola si WhatsApp no está conectado).
+    if (status === "completed") {
+      const appt = next.appointments.find((a) => a.id === id);
+      if (appt) {
+        const url = `${window.location.origin}/resena/${next.org.slug}?cita=${appt.id}`;
+        setLastMessage(reviewRequestMessage(next, appt, url));
+        setLastMessageKind("resena");
         setCopied(false);
       }
     }
@@ -200,9 +217,9 @@ export default function AgendaPage() {
           <CardContent className="space-y-3">
             <p className="text-sm text-green-900">{lastMessage}</p>
             <p className="text-xs text-green-800">
-              Este es el texto que se le manda por WhatsApp. Si es primera
-              vez, ya trae la recomendación de llegar 15 minutos antes para
-              llenar su historial clínico.
+              {lastMessageKind === "resena"
+                ? "Este es el texto de solicitud de reseña con su link de calificación. En modo demo se copia a mano; en la nube lo manda el bot por WhatsApp (o queda en cola si no está conectado)."
+                : "Este es el texto que se le manda por WhatsApp. Si es primera vez, ya trae la recomendación de llegar 15 minutos antes para llenar su historial clínico."}
             </p>
             <Button size="sm" variant="outline" onClick={copyMessage}>
               {copied ? "Copiado ✓" : "Copiar mensaje"}

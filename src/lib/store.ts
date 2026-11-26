@@ -21,10 +21,12 @@ import type {
   Doctor,
   Organization,
   Promoter,
+  PromoterConversation,
   Service,
   SourceType,
   StatusType,
 } from "./types";
+import type { FeedbackItem, ReviewRequest } from "./reviews";
 
 const KEY = "vincimia-agenda-demo-v1";
 
@@ -35,6 +37,15 @@ export interface StoreData {
   contacts: Contact[];
   appointments: Appointment[];
   doctors: Doctor[];
+  /** Reseñas del módulo de Reseñas (migración 007). Vacío al inicio:
+   *  no hay calificaciones de ejemplo. */
+  feedback: FeedbackItem[];
+  /** Solicitudes de reseña encoladas/enviadas al completar citas. */
+  reviewRequests: ReviewRequest[];
+  /** Conversaciones de los promotores virtuales (migración 008):
+   *  una fila por paciente y promotor. Vacías al inicio: no se
+   *  inventan pacientes. */
+  conversations: PromoterConversation[];
   seededFor: string;
   /**
    * true cuando el usuario borró los datos de ejemplo en Ajustes.
@@ -58,6 +69,9 @@ function seed(): StoreData {
     contacts: DEMO_CONTACTS,
     appointments: DEMO_APPOINTMENTS,
     doctors: DEMO_DOCTORS,
+    feedback: [],
+    reviewRequests: [],
+    conversations: [],
     seededFor: todayISO(),
     demoCleared: false,
   };
@@ -80,7 +94,28 @@ export function loadStore(): StoreData {
       parsed.org.break_start = null;
       parsed.org.break_end = null;
     }
+    if (parsed.org && parsed.org.google_review_url === undefined) {
+      parsed.org.google_review_url = null;
+    }
     if (!parsed.appointments) parsed.appointments = [];
+    // Migración suave del módulo de Reseñas: los almacenes viejos no
+    // tenían feedback ni solicitudes; arrancan vacíos, sin inventar nada.
+    if (!parsed.feedback) parsed.feedback = [];
+    if (!parsed.reviewRequests) parsed.reviewRequests = [];
+    // Migración suave de Promotores virtuales (008): los almacenes
+    // viejos no tenían conversaciones; arrancan vacías. Y si no hay
+    // ningún promotor virtual, se agregan los 3 por defecto (sin
+    // tocar los promotores humanos que ya tenga el usuario).
+    if (!parsed.conversations) parsed.conversations = [];
+    if (!parsed.promoters.some((p) => p.is_virtual)) {
+      parsed.promoters = [
+        ...parsed.promoters,
+        ...DEMO_PROMOTERS.filter((p) => p.is_virtual).map((p) => ({
+          ...p,
+          organization_id: parsed.org.id,
+        })),
+      ];
+    }
     // Cada día se regeneran las citas de ejemplo para que la Agenda
     // de hoy siempre tenga datos con los que probar el anti-empalme.
     // Salvo que el usuario ya haya borrado los datos de ejemplo en
@@ -131,6 +166,9 @@ export function clearDemoData(data: StoreData): StoreData {
     contacts: [],
     appointments: [],
     doctors: [],
+    feedback: [],
+    reviewRequests: [],
+    conversations: [],
     demoCleared: true,
   };
   saveStore(next);

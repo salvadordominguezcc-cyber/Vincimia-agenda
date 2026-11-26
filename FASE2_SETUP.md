@@ -116,6 +116,17 @@ tu calendario personal.
    huecos en orden: nombre, servicio, fecha, hora. Ejemplo:
    `Hola {{1}}, tu cita de {{2}} está confirmada para el {{3}} a
    las {{4}}. Te esperamos.` Espera a que Meta la apruebe.
+
+   **Plantilla de reseñas (opcional, módulo de Reseñas):** mismo
+   camino, nombre sugerido `solicitud_resena`, categoría
+   **Utility**, idioma **es_MX**, cuerpo con 3 huecos en orden:
+   nombre del paciente, nombre del negocio, link de calificación.
+   Ejemplo: `Hola {{1}}, gracias por tu visita a {{2}}. ¿Cómo
+   calificarías tu experiencia hoy? Califica aquí: {{3}}` Espera a
+   que Meta la apruebe. Sin esta plantilla, la solicitud de reseña
+   se manda como texto libre (solo llega si el paciente escribió
+   en las últimas 24 horas); si WhatsApp no está conectado, queda
+   en cola en `review_requests` y no se simula el envío.
 6. Configura el **webhook** en **WhatsApp → Configuration**:
    - **Callback URL:**
      `https://vincimia-agenda.pages.dev/api/webhook/whatsapp`
@@ -134,6 +145,7 @@ Environment variables** → **Add** (Production):
 | `WHATSAPP_PHONE_NUMBER_ID` | El Phone number ID de Meta |
 | `WHATSAPP_VERIFY_TOKEN` | La misma palabra secreta del webhook |
 | `WHATSAPP_TEMPLATE_NAME` | `confirmacion_cita` (solo si creaste la plantilla) |
+| `WHATSAPP_REVIEW_TEMPLATE_NAME` | `solicitud_resena` (opcional, solo si creaste la plantilla de reseñas) |
 
 Pulsa **Save** y **Retry deployment**.
 
@@ -149,7 +161,36 @@ Pulsa **Save** y **Retry deployment**.
    si responde **Cancelar**, queda cancelada. Cualquier otro
    mensaje recibe su resumen de cita.
 
-### 3.4 Costo de los mensajes (Meta)
+### 3.4 Aviso al dueño con el FORMATO DE CITA (para el grupo)
+
+Al confirmar una cita en la nube, además de la confirmación al
+paciente, el bot llena solo el **FORMATO DE CITA** y se lo manda por
+WhatsApp al dueño (Salvador), para que él lo reenvíe al grupo de
+promotores. La tarjeta lleva: clínica, paciente, teléfono, fecha,
+hora, tratamiento que busca (por defecto VALORACIÓN, porque las citas
+de Agenda son normalmente de primera vez), promotora, por dónde llegó
+y póliza (por defecto `PARTICULAR /SALVADOR`).
+
+**El bot NO puede subirla directo al grupo:** la API de WhatsApp
+Cloud de Meta solo manda mensajes 1 a 1, no a grupos. El reenvío al
+grupo sigue siendo manual, pero ya con la tarjeta llena.
+
+- **Número del dueño:** variable `OWNER_WHATSAPP_NUMBER` en
+  Cloudflare (Production), en formato internacional sin `+`
+  (ej. `526861140969`). Si no se pone, se usa el teléfono de dueño
+  en Supabase si existe y, si no, `526861140969`.
+- **Ventana de 24 horas:** el aviso es texto libre, así que solo
+  llega si el dueño escribió al número 663 en las últimas 24 horas.
+  Fuera de esa ventana Meta lo rechaza (error 131047) y la ruta lo
+  registra como fallo en `owner_notify.reason`, sin romper la
+  confirmación. No hay plantilla de aviso al dueño: no se inventó
+  ninguna.
+- **Si falla, nada se rompe:** el aviso al dueño es independiente
+  de la confirmación al paciente. La respuesta de
+  `/api/appointments/status` trae `owner_notify` con `done` y el
+  motivo cuando no se pudo mandar.
+
+### 3.5 Costo de los mensajes (Meta)
 
 - Los mensajes que **manda el paciente nunca se cobran**.
 - Los primeros **1,000 mensajes de servicio al mes por número son

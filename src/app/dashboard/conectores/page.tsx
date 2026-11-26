@@ -24,11 +24,24 @@ interface WaStatus {
   message: string;
 }
 
+interface MetaChannelStatus {
+  configured: boolean;
+  status: string;
+  message: string;
+  webhook_url: string;
+}
+
+interface MetaStatus {
+  messenger: MetaChannelStatus;
+  instagram: MetaChannelStatus;
+}
+
 export default function ConectoresPage() {
   const [data, setData] = useState<StoreData | null>(null);
   const [testResult, setTestResult] = useState("");
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [wa, setWa] = useState<WaStatus | null>(null);
+  const [meta, setMeta] = useState<MetaStatus | null>(null);
   const [googleBanner, setGoogleBanner] = useState("");
   const [syncResult, setSyncResult] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -39,12 +52,14 @@ export default function ConectoresPage() {
 
   const loadStatuses = async (id: string) => {
     try {
-      const [g, w] = await Promise.all([
+      const [g, w, m] = await Promise.all([
         fetch(`/api/google-calendar/status?organization_id=${id}`).then((r) => r.json()),
         fetch(`/api/whatsapp/status?organization_id=${id}`).then((r) => r.json()),
+        fetch("/api/meta/status").then((r) => r.json()),
       ]);
       setGoogle(g as GoogleStatus);
       setWa(w as WaStatus);
+      setMeta(m as MetaStatus);
     } catch {
       // Sin red, las tarjetas muestran su estado pendiente por defecto.
     }
@@ -389,6 +404,80 @@ export default function ConectoresPage() {
               {typeof window !== "undefined"
                 ? `${window.location.origin}/api/webhook/whatsapp`
                 : "/api/webhook/whatsapp"}
+            </code>
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-2 border-slate-300">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-brand-600" />
+            Messenger (Facebook)
+            <span className="rounded-full bg-slate-200 px-2 py-1 text-xs font-medium text-slate-700">
+              {meta?.messenger.configured ? "Configurado, pendiente de autorizar" : "Pendiente de conectar"}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p>{meta?.messenger.message ?? "Cargando el estado de Messenger…"}</p>
+          <p>
+            Cuando esté conectado, los mensajes de la fanpage llegan a la
+            bandeja y el promotor virtual de ese canal contesta solo, con
+            el mismo cerebro que en WhatsApp. Si quiere agendar, le pasa
+            el link de WhatsApp con su código.
+          </p>
+          <p>
+            Para activarlo falta: el producto Messenger en la app de Meta,
+            autorizar la página, verificar el webhook y pegar
+            <code className="rounded bg-slate-100 px-1"> META_PAGE_ACCESS_TOKEN</code> y
+            <code className="rounded bg-slate-100 px-1"> META_VERIFY_TOKEN</code> en
+            Cloudflare (paso a paso en <code>PROMOTORES_VIRTUALES.md</code>).
+          </p>
+          <p className="text-xs text-slate-500">
+            Webhook para pegar en Meta:{" "}
+            <code className="rounded bg-slate-100 px-1">
+              {typeof window !== "undefined"
+                ? `${window.location.origin}/api/webhook/messenger`
+                : "/api/webhook/messenger"}
+            </code>
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-2 border-slate-300">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-brand-600" />
+            Instagram
+            <span className="rounded-full bg-slate-200 px-2 py-1 text-xs font-medium text-slate-700">
+              {meta?.instagram.configured ? "Configurado, pendiente de autorizar" : "Pendiente de conectar"}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p>{meta?.instagram.message ?? "Cargando el estado de Instagram…"}</p>
+          <p>
+            Cuando esté conectado, los mensajes directos de la cuenta
+            profesional de Instagram llegan a la bandeja y el promotor
+            virtual de ese canal contesta solo, con el mismo cerebro que
+            en WhatsApp. Si quiere agendar, le pasa el link de WhatsApp
+            con su código.
+          </p>
+          <p>
+            Para activarlo falta: el producto Instagram en la app de Meta,
+            vincular la cuenta profesional con su fanpage, autorizarla,
+            verificar el webhook y pegar
+            <code className="rounded bg-slate-100 px-1"> META_INSTAGRAM_TOKEN</code> y
+            <code className="rounded bg-slate-100 px-1"> META_VERIFY_TOKEN</code> en
+            Cloudflare (paso a paso en <code>PROMOTORES_VIRTUALES.md</code>).
+          </p>
+          <p className="text-xs text-slate-500">
+            Webhook para pegar en Meta:{" "}
+            <code className="rounded bg-slate-100 px-1">
+              {typeof window !== "undefined"
+                ? `${window.location.origin}/api/webhook/instagram`
+                : "/api/webhook/instagram"}
             </code>
           </p>
         </CardContent>

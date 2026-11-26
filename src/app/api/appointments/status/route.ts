@@ -8,6 +8,9 @@
 //   (si está configurado y el paciente tiene teléfono).
 // - cancelled: actualiza, borra su evento de Google y no manda WhatsApp.
 // - completed: actualiza (check-in) y actualiza su evento en Google.
+//   Además dispara el módulo de Reseñas: encola/manda por WhatsApp el
+//   link de calificación (/resena/<slug>); si WhatsApp no está
+//   conectado, la solicitud queda en cola en review_requests.
 // Devuelve el resultado por canal: si un canal no está conectado, lo
 // dice y no lo inventa. Si la cita solo existe en el aparato del
 // usuario (no en la nube), responde 404 y el panel sigue funcionando
@@ -22,12 +25,18 @@ import {
   loadAppointmentFull,
   loadOrg,
   pushAppointmentToGoogle,
+  queueReviewRequest,
+  type ReviewRequestResult,
 } from "@/lib/server-appointments";
 import {
   normalizePhone,
   sendWhatsAppConfirmation,
   whatsappConfigured,
 } from "@/lib/whatsapp";
+import {
+  notifyOwnerOfConfirmation,
+  type OwnerNotifyResult,
+} from "@/lib/owner-notify";
 
 const ALLOWED = ["confirmed", "cancelled", "completed"] as const;
 
@@ -122,6 +131,39 @@ export async function POST(req: Request) {
     }
   }
 
+  // Aviso al dueño con el FORMATO DE CITA ya lleno, para que lo
+  // reenvíe al grupo de promotores. Es independiente de la
+  // confirmación al paciente: si falla (o el paciente no tiene
+  // teléfono), el otro aviso se intenta igual y el cambio de estado
+  // no se rompe. Solo al confirmar, no al cancelar ni completar.
+  let ownerNotify: OwnerNotifyResult = {
+    done: false,
+    to: null,
+    reason: "Solo se avisa al dueño al confirmar.",
+  };
+  if (status === "confirmed") {
+    let promoterName: string | null = null;
+    if (appt.promoter_id) {
+      const { data: prom } = await supabase
+        .from("promoters")
+        .select("name")
+        .eq("id", appt.promoter_id)
+        .single();
+      promoterName = (prom as { name?: string } | null)?.name ?? null;
+    }
+    ownerNotify = await notifyOwnerOfConfirmation(supabase, org, appt, {
+      promoterName,
+    });
+  }
+
+  // Módulo de Reseñas: al completar la cita (check-in) se encola/manda
+  // la solicitud de calificación por WhatsApp. Si WhatsApp no está
+  // conectado, queda en cola en review_requests: nada se simula.
+  let reviewRequest: ReviewRequestResult | null = null;
+  if (status === "completed") {
+    reviewRequest = await queueReviewRequest(supabase, org, appt);
+  }
+
   return Response.json({
     ok: true,
     status,
@@ -129,5 +171,7 @@ export async function POST(req: Request) {
       ? { done: true, action: google.action }
       : { done: false, reason: google.reason },
     whatsapp,
+    owner_notify: ownerNotify,
+    review_request: reviewRequest,
   });
 }
