@@ -70,14 +70,15 @@ function weekdaySchedule(
 }
 
 // Doctores de ejemplo — las 5 especialidades que dio Salvador.
-// Colores distintos para que cada doctor se vea de un color en el calendario.
+// Color según la regla de la clínica (2026-11-26), igual que en
+// Google Calendar: rojo general, morado ortodoncia, turquesa endodoncia.
 export const DEMO_DOCTORS: Doctor[] = [
   {
     id: "a1111111-1111-1111-1111-111111111111",
     organization_id: DEMO_ORG_ID,
     name: "Dra. Ana López",
     specialty: "general",
-    color: "#2563eb",
+    color: "#dc2626",
     requires_deposit: false,
     schedule: weekdaySchedule([1, 2, 3, 4, 5, 6], "09:00", "18:00"),
     active: true,
@@ -99,7 +100,7 @@ export const DEMO_DOCTORS: Doctor[] = [
     organization_id: DEMO_ORG_ID,
     name: "Dra. María Torres",
     specialty: "endodoncista",
-    color: "#059669",
+    color: "#0891b2",
     requires_deposit: true,
     schedule: weekdaySchedule([1, 3, 5], "09:00", "17:00"),
     active: true,
@@ -110,7 +111,7 @@ export const DEMO_DOCTORS: Doctor[] = [
     organization_id: DEMO_ORG_ID,
     name: "Dr. Jorge Sánchez",
     specialty: "endodoncista_general",
-    color: "#ea580c",
+    color: "#0891b2",
     requires_deposit: false,
     schedule: weekdaySchedule([2, 4, 6], "09:00", "15:00"),
     active: true,
@@ -121,7 +122,7 @@ export const DEMO_DOCTORS: Doctor[] = [
     organization_id: DEMO_ORG_ID,
     name: "Dra. Lucía Fernández",
     specialty: "ortopediatra",
-    color: "#db2777",
+    color: "#dc2626",
     requires_deposit: false,
     schedule: weekdaySchedule([1, 2, 3, 4, 5], "09:00", "15:00"),
     active: true,

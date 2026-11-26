@@ -345,6 +345,25 @@ export function createAppointment(
   return { ok: true, appointment };
 }
 
+/** Reescribe el id de una cita local con su id de la nube (después
+ *  de crearla por el link o de subirla en la migración). A partir de
+ *  ahí, Confirmar/Cancelar/Check-in en el panel ya pegan contra la
+ *  nube y disparan Google Calendar + WhatsApp + aviso al dueño. */
+export function adoptCloudAppointmentId(
+  data: StoreData,
+  localId: string,
+  cloudId: string
+): StoreData {
+  const next: StoreData = {
+    ...data,
+    appointments: data.appointments.map((a) =>
+      a.id === localId ? { ...a, id: cloudId } : a
+    ),
+  };
+  saveStore(next);
+  return next;
+}
+
 /** Guarda el intento que chocó como cita en estado "conflict" (registro
  *  visible en Agenda, sin bloquear a otras citas y sin generar comisión). */
 export function saveAsConflict(

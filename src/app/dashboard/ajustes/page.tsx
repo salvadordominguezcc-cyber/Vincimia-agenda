@@ -20,6 +20,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { clearDemoData, loadStore, saveStore, type StoreData } from "@/lib/store";
+import {
+  applyCloudIds,
+  fetchCloudAppointments,
+  localOnlyAppointments,
+  mergeCloudIntoStore,
+  uploadLocalAppointments,
+} from "@/lib/cloud-sync";
 import { supabaseBrowser, supabaseConfigured } from "@/lib/supabase";
 import { slugify } from "@/lib/types";
 
@@ -39,6 +46,11 @@ export default function AjustesPage() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearMessage, setClearMessage] = useState("");
+  // Sincronización con la nube: subir las citas que solo viven en
+  // este aparato y bajar las que ya están en Supabase.
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncError, setSyncError] = useState("");
 
   useEffect(() => {
     const d = loadStore();
@@ -158,6 +170,57 @@ export default function AjustesPage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Sube a la nube las citas que solo viven en este aparato. No borra
+  // nada local: solo les pone su id de la nube para que al confirmarlas
+  // ya lleguen a Google Calendar y a WhatsApp.
+  const uploadToCloud = async () => {
+    if (!data) return;
+    setSyncing(true);
+    setSyncMessage("");
+    setSyncError("");
+    try {
+      const result = await uploadLocalAppointments(data);
+      let next = data;
+      if (result.mapping.length > 0) {
+        next = applyCloudIds(data, result.mapping);
+        setData(next);
+      }
+      const parts = [`${result.uploaded} citas subidas a la nube.`];
+      if (result.skipped > 0) parts.push(`${result.skipped} ya estaban en la nube.`);
+      if (result.errors.length > 0) parts.push(`${result.errors.length} no se pudieron subir.`);
+      setSyncMessage(parts.join(" "));
+      if (result.errors.length > 0) setSyncError(result.errors.slice(0, 3).join(" "));
+    } catch (e) {
+      setSyncError(`No se pudo subir: ${String(e)}. Revisa tu conexión e inténtalo de nuevo.`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Baja las citas de la nube y las mezcla con las de este aparato.
+  const downloadFromCloud = async () => {
+    if (!data) return;
+    setSyncing(true);
+    setSyncMessage("");
+    setSyncError("");
+    try {
+      const cloud = await fetchCloudAppointments(data.org.id, data.org.excel_webhook_secret);
+      const before = data.appointments.length;
+      const next = mergeCloudIntoStore(data, cloud);
+      setData(next);
+      const added = next.appointments.length - before;
+      setSyncMessage(
+        added > 0
+          ? `Listo: llegaron ${added} citas de la nube.`
+          : "Ya estabas al día: no llegó ninguna cita nueva de la nube."
+      );
+    } catch (e) {
+      setSyncError(`No se pudo bajar: ${String(e)}. Revisa tu conexión e inténtalo de nuevo.`);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -375,6 +438,43 @@ export default function AjustesPage() {
               {saving ? "Guardando…" : "Guardar cambios"}
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Sincronizar con la nube</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {syncMessage && (
+            <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">
+              {syncMessage}
+            </p>
+          )}
+          {syncError && (
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+              {syncError}
+            </p>
+          )}
+          <p className="text-sm text-slate-600">
+            Solo las citas que están en la nube llegan a Google Calendar y
+            reciben la confirmación por WhatsApp. Ahora mismo tienes{" "}
+            <strong>{localOnlyAppointments(data).length} citas</strong> que
+            solo viven en este aparato.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={uploadToCloud} disabled={syncing || localOnlyAppointments(data).length === 0}>
+              {syncing ? "Sincronizando…" : "Subir mis citas locales a la nube"}
+            </Button>
+            <Button variant="outline" onClick={downloadFromCloud} disabled={syncing}>
+              {syncing ? "Sincronizando…" : "Bajar citas de la nube"}
+            </Button>
+          </div>
+          <p className="text-xs text-slate-500">
+            Al subir, las citas quedan también en la nube con su mismo
+            estado; nada se borra de este aparato. Al bajar, las citas de
+            la nube se agregan a las de aquí, sin duplicar.
+          </p>
         </CardContent>
       </Card>
 

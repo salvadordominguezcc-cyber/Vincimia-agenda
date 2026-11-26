@@ -173,8 +173,76 @@ export interface AppointmentForGoogle {
   contactPhone: string | null;
   serviceName: string;
   doctorName: string | null;
+  /** Especialidad del doctor (general, ortodoncia_general,
+   *  endodoncista, ...): decide el color del evento. */
+  doctorSpecialty?: string | null;
+  /** Póliza de la cita, ej. "PARTICULAR /SALVADOR". */
+  policy?: string | null;
+  /** Nombre del promotor que trajo la cita (por defecto Salvador). */
+  promoterName?: string | null;
+  source?: string | null;
   orgName: string;
   siteUrl: string;
+}
+
+/** Teléfono a 10 dígitos (formato que usa la clínica en el título:
+ *  "6861991700"). Quita el 52 de México y cualquier otro carácter. */
+export function phone10(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("52")) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  return digits || null;
+}
+
+/** Colores de Google Calendar (colorId) según la regla de la clínica
+ *  (2026-11-26): rojo para póliza Particular con doctor general;
+ *  otros tratamientos llevan su color. Google solo tiene 11 colores:
+ *  11 = Tomato (rojo), 3 = Grape (morado), 7 = Peacock (turquesa). */
+export function googleColorIdFor(appt: AppointmentForGoogle): string {
+  const s = (appt.doctorSpecialty ?? "").toLowerCase();
+  if (s === "endodoncista" || s === "endodoncista_general") return "7";
+  if (s === "ortodoncia_general") return "3";
+  return "11";
+}
+
+/** Emoji de estado del título, como lo usa la clínica en su
+ *  calendario: 🟢 cita confirmada, 🟡 pendiente. */
+export function statusEmoji(status: string): string {
+  return status === "confirmed" || status === "completed" ? "🟢" : "🟡";
+}
+
+const dayLongFmt = new Intl.DateTimeFormat("es-MX", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+const time12Fmt = new Intl.DateTimeFormat("es-MX", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+});
+
+/** Texto que se le manda al paciente por WhatsApp, con el mismo
+ *  formato que usa la clínica hoy: "Hola, tienes una cita el jueves,
+ *  12 de noviembre, a las 02:00 p. m. con Dental dentiplus Mexicali."
+ *  El nombre del negocio sale de la organización (Ajustes). */
+export function clientWhatsAppText(appt: AppointmentForGoogle): string {
+  const date = new Date(`${appt.start_time.slice(0, 10)}T12:00:00`);
+  const day = dayLongFmt.format(date);
+  const time = time12Fmt.format(new Date(`2000-01-01T${appt.start_time.slice(11, 16)}:00`));
+  return `Hola, tienes una cita el ${day}, a las ${time} con ${appt.orgName}.`;
+}
+
+/** Link api.whatsapp.com/send con el texto ya escrito, listo para
+ *  hablarle al cliente desde la descripción del evento (como lo hace
+ *  Confirmafy hoy, pero sin depender de ese servicio externo). */
+export function clientWhatsAppLink(appt: AppointmentForGoogle): string | null {
+  const p10 = phone10(appt.contactPhone);
+  if (!p10) return null;
+  return `https://api.whatsapp.com/send?phone=52${p10}&text=${encodeURIComponent(
+    clientWhatsAppText(appt)
+  )}`;
 }
 
 /** Las citas se guardan como hora local (ej. "2026-11-19T10:00:00").
@@ -184,17 +252,46 @@ function toGoogleDateTime(localISO: string): string {
   return `${clean}${MX_OFFSET}`;
 }
 
+/** Formato de evento igual al que usa la clínica en su Google
+ *  Calendar (antes lo generaba Confirmafy; ahora lo genera Vincimia):
+ *  título "🟢 Nombre / teléfono / tratamiento", color según el
+ *  doctor (rojo Particular/general, morado ortodoncia, turquesa
+ *  endodoncia), recordatorio 30 minutos antes, y descripción con la
+ *  póliza, el promotor, el canal y el link de WhatsApp con el texto
+ *  ya escrito para hablarle al cliente. */
 export function googleEventBody(appt: AppointmentForGoogle): Record<string, unknown> {
+  const p10 = phone10(appt.contactPhone);
+  const emoji = statusEmoji(appt.status);
+  const summary = p10
+    ? `${emoji} ${appt.contactName} / ${p10} / ${appt.serviceName}`
+    : `${emoji} ${appt.contactName} / ${appt.serviceName}`;
+  const waLink = clientWhatsAppLink(appt);
+  const channel: Record<string, string> = {
+    vincimia_link: "Link público",
+    whatsapp_bot: "WhatsApp",
+    excel_promoter: "Excel / Promotor",
+    google_calendar: "Google Calendar",
+  };
+  const description =
+    `Cita de ${appt.orgName} (Vincimia Agenda).\n` +
+    `Paciente: ${appt.contactName}${appt.contactPhone ? ` (${appt.contactPhone})` : ""}\n` +
+    `Servicio: ${appt.serviceName}\n` +
+    `Doctor: ${appt.doctorName ?? "Sin asignar"}\n` +
+    `Póliza: ${appt.policy ?? "PARTICULAR /SALVADOR"}\n` +
+    `Promotora: ${appt.promoterName ?? "Salvador"}\n` +
+    `Llegó por: ${channel[appt.source ?? ""] ?? "Link público"}\n` +
+    `Estado: ${appt.status}\n` +
+    (appt.notes ? `Notas: ${appt.notes}\n` : "") +
+    (waLink ? `Hablar con el cliente: ${waLink}\n` : "") +
+    `Ver en la agenda: ${appt.siteUrl}/dashboard`;
   return {
-    summary: `Cita — ${appt.contactName} — ${appt.serviceName}`,
-    description:
-      `Cita de ${appt.orgName} (Vincimia Agenda).\n` +
-      `Paciente: ${appt.contactName}${appt.contactPhone ? ` (${appt.contactPhone})` : ""}\n` +
-      `Servicio: ${appt.serviceName}\n` +
-      `Doctor: ${appt.doctorName ?? "Sin asignar"}\n` +
-      `Estado: ${appt.status}\n` +
-      (appt.notes ? `Notas: ${appt.notes}\n` : "") +
-      `Ver en la agenda: ${appt.siteUrl}/dashboard`,
+    summary,
+    description,
+    colorId: googleColorIdFor(appt),
+    reminders: {
+      useDefault: false,
+      overrides: [{ method: "popup", minutes: 30 }],
+    },
     start: { dateTime: toGoogleDateTime(appt.start_time), timeZone: CLINIC_TIME_ZONE },
     end: { dateTime: toGoogleDateTime(appt.end_time), timeZone: CLINIC_TIME_ZONE },
   };

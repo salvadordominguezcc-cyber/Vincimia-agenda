@@ -218,14 +218,50 @@ grupo sigue siendo manual, pero ya con la tarjeta llena.
    las dos, y confirmar una cita debe seguir funcionando en la
    Agenda, con el mensaje listo para copiar a mano.
 
+## 4b. Reserva por link ya en la nube (migración 2026-11-26)
+
+Antes, la reserva pública solo guardaba la cita en el aparato y el
+servidor respondía 404: no llegaba a Google ni a WhatsApp. Ahora:
+
+- `POST /api/appointments/create` (ruta pública, 10 intentos/min
+  por IP) crea la cita en Supabase en pendiente (o en pausa si el
+  doctor exige anticipo), con contacto por teléfono/nombre,
+  anti-empalme contra la nube y notas `Póliza: PARTICULAR /SALVADOR
+  · Promoción: VALORACIÓN`. El link adopta el id de la nube, así
+  que al confirmar en el panel ya dispara Google + WhatsApp + aviso
+  al dueño (`/api/appointments/status`, sin cambios).
+- Si la nube no responde, la cita queda solo en el aparato y la
+  pantalla lo dice claro: no se finge sincronización.
+- Ajustes → **Sincronizar con la nube**: sube las citas locales
+  (`POST /api/appointments/migrate`, con mapa local_id → cloud_id)
+  y baja las de la nube (`GET /api/appointments/list`). El
+  Calendario también tiene botón **Sincronizar**. Nada se borra en
+  silencio.
+- Formato del evento en Google (igual al de la clínica, antes
+  generado por Confirmafy; ahora lo genera Vincimia y Confirmafy se
+  puede cancelar cuando la prueba pase): título `🟢 Nombre /
+  teléfono / tratamiento` (🟡 si está pendiente), color por doctor
+  (rojo Particular/general = colorId 11, morado ortodoncia = 3,
+  turquesa endodoncia = 7), recordatorio 30 minutos antes, y
+  descripción con póliza, promotora, canal y link
+  `api.whatsapp.com/send` con el texto ya escrito para hablarle al
+  cliente. La importación desde Google (`/api/google-calendar/sync`)
+  ya entiende ese formato de título y su teléfono.
+- `WHATSAPP_TEMPLATE_NAME` sigue siendo el punto a verificar en
+  Cloudflare: sin esa variable, la confirmación sale como texto
+  libre y solo llega si el paciente escribió al número 663 en las
+  últimas 24 horas.
+
 ## 5. Límites honestos de esta Fase 2
 
 - La sincronización trabaja sobre las **citas de la nube**
-  (Supabase): las que crea el webhook de Sheets, la semilla y el
-  servidor. El panel todavía lee sus datos del aparato
-  (localStorage), así que una cita creada solo en el aparato no se
-  sube a Google ni se manda por WhatsApp hasta la migración del
-  panel a Supabase (siguiente paso, no parte de esta fase).
+  (Supabase): las del webhook de Sheets, la semilla, el servidor y
+  ahora también las del link público y las subidas desde Ajustes.
+  Las citas creadas a mano en el panel (Nueva cita) siguen siendo
+  locales hasta que se suban con el botón de Ajustes; el panel
+  todavía lee sus datos del aparato (localStorage) y mezcla las de
+  la nube con Sincronizar, no es todavía una lectura directa de
+  Supabase con RLS en el navegador.
 - Google usa la zona horaria de la clínica
   (America/Mexico_City, UTC-6).
 - El bot contesta Confirmo / Cancelar; no agenda citas nuevas por

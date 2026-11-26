@@ -18,6 +18,7 @@ import {
   DOCTOR_COLORS,
   SPECIALTIES,
   SPECIALTY_LABEL,
+  doctorColorForSpecialty,
   type Doctor,
   type DoctorScheduleDay,
   type DoctorSpecialty,
@@ -91,7 +92,10 @@ export default function DoctoresPage() {
     setEditingId(doc ? doc.id : null);
     setName(doc ? doc.name : "");
     setSpecialty(doc ? doc.specialty : "general");
-    setColor(doc ? doc.color : DOCTOR_COLORS[0]);
+    // Al crear, el color arranca con el de la especialidad (rojo
+    // general, morado ortodoncia, turquesa endodoncia); se puede
+    // cambiar a mano después.
+    setColor(doc ? doc.color : doctorColorForSpecialty("general"));
     setRequiresDeposit(doc ? doc.requires_deposit : false);
     setSchedule(doc ? doc.schedule : defaultSchedule());
     setError("");

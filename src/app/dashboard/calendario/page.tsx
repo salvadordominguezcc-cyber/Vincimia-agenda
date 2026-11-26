@@ -31,6 +31,7 @@ import {
 import { DoctorChip } from "@/components/DoctorChip";
 import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
 import { notifyAppointmentStatus } from "@/lib/notify-channels";
+import { syncDown } from "@/lib/cloud-sync";
 import { supabaseConfigured } from "@/lib/supabase";
 import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
 import { CalendarCheck, CheckCircle2, X, XCircle } from "lucide-react";
@@ -144,6 +145,8 @@ export default function CalendarioPage() {
     "confirmacion"
   );
   const [copied, setCopied] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   useEffect(() => {
     setData(loadStore());
@@ -237,6 +240,25 @@ export default function CalendarioPage() {
     }
   };
 
+  const syncFromCloud = async () => {
+    if (!data) return;
+    setSyncing(true);
+    setSyncMessage("");
+    try {
+      const added = await syncDown(data);
+      setData(loadStore());
+      setSyncMessage(
+        added > 0
+          ? `Llegaron ${added} citas de la nube.`
+          : "Ya estabas al día: no llegó ninguna cita nueva de la nube."
+      );
+    } catch (e) {
+      setSyncMessage(`No se pudo sincronizar: ${String(e)}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const counts = (Object.keys(SOURCE_COLOR) as SourceType[]).map((s) => ({
     source: s,
     count: visible.filter((a) => a.source === s).length,
@@ -299,11 +321,25 @@ export default function CalendarioPage() {
           >
             ›
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={syncFromCloud}
+            disabled={syncing}
+          >
+            {syncing ? "Sincronizando…" : "Sincronizar"}
+          </Button>
           <Link href="/dashboard/nueva">
             <Button>+ Nueva cita</Button>
           </Link>
         </div>
       </div>
+
+      {syncMessage && (
+        <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">
+          {syncMessage}
+        </p>
+      )}
 
       <p className="text-lg font-semibold capitalize">{title}</p>
 

@@ -60,6 +60,13 @@ export interface ApptFull {
   contactPhone: string | null;
   serviceName: string;
   doctorName: string | null;
+  /** Especialidad del doctor: decide el color del evento en Google. */
+  doctorSpecialty: string | null;
+  /** Póliza de la cita (se guarda en las notas como
+   *  "Póliza: PARTICULAR /SALVADOR"). */
+  policy: string | null;
+  /** Nombre del promotor que trajo la cita, si lo tiene. */
+  promoterName: string | null;
 }
 
 export async function loadOrg(
@@ -88,7 +95,7 @@ export async function loadAppointmentFull(
     .eq("organization_id", organizationId)
     .single();
   if (!appt) return null;
-  const [contact, service, doctor] = await Promise.all([
+  const [contact, service, doctor, promoter] = await Promise.all([
     appt.contact_id
       ? supabase.from("contacts").select("full_name, phone").eq("id", appt.contact_id).single()
       : Promise.resolve({ data: null }),
@@ -96,15 +103,25 @@ export async function loadAppointmentFull(
       ? supabase.from("services").select("name").eq("id", appt.service_id).single()
       : Promise.resolve({ data: null }),
     appt.doctor_id
-      ? supabase.from("doctors").select("name").eq("id", appt.doctor_id).single()
+      ? supabase.from("doctors").select("name, specialty").eq("id", appt.doctor_id).single()
+      : Promise.resolve({ data: null }),
+    appt.promoter_id
+      ? supabase.from("promoters").select("name").eq("id", appt.promoter_id).single()
       : Promise.resolve({ data: null }),
   ]);
+  // La póliza viaja en las notas ("Póliza: PARTICULAR /SALVADOR · ...").
+  const policyMatch = typeof appt.notes === "string"
+    ? appt.notes.match(/Póliza:\s*([^·\n]+)/i)
+    : null;
   return {
     ...(appt as ApptFull),
     contactName: (contact.data as { full_name?: string } | null)?.full_name ?? "Sin contacto",
     contactPhone: (contact.data as { phone?: string | null } | null)?.phone ?? null,
     serviceName: (service.data as { name?: string } | null)?.name ?? "Servicio",
     doctorName: (doctor.data as { name?: string } | null)?.name ?? null,
+    doctorSpecialty: (doctor.data as { specialty?: string | null } | null)?.specialty ?? null,
+    policy: policyMatch ? policyMatch[1].trim() : null,
+    promoterName: (promoter.data as { name?: string } | null)?.name ?? null,
   };
 }
 
@@ -253,6 +270,10 @@ function toGoogleAppt(org: OrgRow, appt: ApptFull): AppointmentForGoogle {
     contactPhone: appt.contactPhone,
     serviceName: appt.serviceName,
     doctorName: appt.doctorName,
+    doctorSpecialty: appt.doctorSpecialty,
+    policy: appt.policy,
+    promoterName: appt.promoterName,
+    source: appt.source,
     orgName: org.name,
     siteUrl: siteUrl(),
   };

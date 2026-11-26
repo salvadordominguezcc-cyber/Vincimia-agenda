@@ -7,6 +7,7 @@ import Link from "next/link";
 import { freeSlots } from "@/lib/anti-overlap";
 import { todayISO } from "@/lib/demo-data";
 import {
+  adoptCloudAppointmentId,
   contactName,
   createAppointment,
   doctorById,
@@ -37,6 +38,11 @@ export default function ReservaPage({
   const [done, setDone] = useState(false);
   const [doneOnHold, setDoneOnHold] = useState(false);
   const [error, setError] = useState("");
+  /** true cuando la cita quedó solo en este aparato: la nube no la
+   *  recibió (sin conexión o sin Supabase) y por eso no llega a
+   *  Google Calendar ni se manda la confirmación por WhatsApp. */
+  const [localOnly, setLocalOnly] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const d = loadStore();
@@ -80,14 +86,16 @@ export default function ReservaPage({
       )
     : [];
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setConflict(null);
+    setLocalOnly(false);
     if (!time) {
       setError("Elige una hora libre de la lista.");
       return;
     }
+    // 1) Se guarda aquí mismo (anti-empalme local, como antes).
     const result = createAppointment(data, {
       clientName,
       clientPhone,
@@ -98,16 +106,61 @@ export default function ReservaPage({
       source: "vincimia_link",
       doctorId: doctorId || null,
     });
-    if (result.ok) {
-      setDoneOnHold(result.appointment?.status === "on_hold");
-      setDone(true);
+    if (!result.ok) {
+      if (result.conflictWith) {
+        setConflict(result.conflictWith);
+        return;
+      }
+      setError(result.error ?? "No se pudo crear la cita.");
       return;
     }
-    if (result.conflictWith) {
-      setConflict(result.conflictWith);
-      return;
+    // 2) Se intenta crearla también en la nube: solo ahí llega a
+    // Google Calendar y a la confirmación por WhatsApp. Si la nube
+    // no responde, la cita queda guardada aquí y se avisa claro que
+    // quedó solo en este aparato, sin inventar que se sincronizó.
+    setSubmitting(true);
+    let onHold = result.appointment?.status === "on_hold";
+    let onlyLocal = false;
+    try {
+      const res = await fetch("/api/appointments/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: params.slug,
+          client_name: clientName,
+          client_phone: clientPhone,
+          service_name: service?.name ?? "",
+          date,
+          time,
+          doctor_id: doctorId || null,
+          doctor_name: doctor?.name ?? null,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        appointment_id?: string;
+        status?: string;
+        message?: string;
+      };
+      if (res.ok && json.ok && json.appointment_id && result.appointment) {
+        // La cita local adopta el id de la nube: el panel ya la ve
+        // como cita de la nube y al confirmarla dispara Google +
+        // WhatsApp + aviso al dueño.
+        adoptCloudAppointmentId(data, result.appointment.id, json.appointment_id);
+        onHold = json.status === "on_hold";
+      } else {
+        // La nube no la recibió (sin conexión, sin Supabase, o el
+        // horario ya se ocupó allá): queda solo en este aparato.
+        onlyLocal = true;
+      }
+    } catch {
+      onlyLocal = true;
+    } finally {
+      setSubmitting(false);
     }
-    setError(result.error ?? "No se pudo crear la cita.");
+    setLocalOnly(onlyLocal);
+    setDoneOnHold(onHold);
+    setDone(true);
   };
 
   return (
@@ -148,11 +201,18 @@ export default function ReservaPage({
                     Cuando aceptes, tu cita se confirma. Todavía no se cobra
                     nada en línea.
                   </>
+                ) : localOnly ? (
+                  <>
+                    Quedó en <strong>pendiente</strong>, pero solo se guardó
+                    en este aparato: no se pudo sincronizar con la agenda de
+                    la clínica, así que todavía no llega a Google Calendar ni
+                    te llegará la confirmación por WhatsApp. Avísale a la
+                    clínica para que la registre.
+                  </>
                 ) : (
                   <>
                     Quedó en <strong>pendiente</strong>. La clínica te
-                    confirmará por teléfono. No hay confirmación automática
-                    por WhatsApp en este MVP (Fase 2).
+                    confirmará por WhatsApp.
                   </>
                 )}
               </p>
@@ -304,8 +364,8 @@ export default function ReservaPage({
                     </div>
                   )}
                 </div>
-                <Button type="submit" className="w-full" disabled={!time}>
-                  Reservar cita
+                <Button type="submit" className="w-full" disabled={!time || submitting}>
+                  {submitting ? "Registrando…" : "Reservar cita"}
                 </Button>
               </form>
             </CardContent>

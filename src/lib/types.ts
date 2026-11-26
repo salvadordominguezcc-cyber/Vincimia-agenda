@@ -74,6 +74,18 @@ export const DOCTOR_COLORS = [
   "#dc2626",
 ];
 
+/** Color del doctor según la regla de la clínica (2026-11-26), el
+ *  mismo en el calendario de Vincimia y en Google Calendar: rojo para
+ *  doctor general (póliza Particular), morado para ortodoncia,
+ *  turquesa para endodoncia. */
+export function doctorColorForSpecialty(specialty: DoctorSpecialty): string {
+  if (specialty === "endodoncista" || specialty === "endodoncista_general") {
+    return "#0891b2";
+  }
+  if (specialty === "ortodoncia_general") return "#7c3aed";
+  return "#dc2626";
+}
+
 export interface Organization {
   id: string;
   name: string;

@@ -166,11 +166,28 @@ export async function POST(req: Request) {
       15,
       Math.round((new Date(endRaw).getTime() - new Date(startRaw).getTime()) / 60_000)
     );
-    // El título suele ser "Cita — Nombre — Servicio"; si no, el título es el nombre.
+    // El título suele ser "🟢 Nombre / teléfono / tratamiento" (formato
+    // de la clínica) o "Cita — Nombre — Servicio" (formato viejo). El
+    // emoji del inicio marca el estado: 🟢 confirmada, 🟡 pendiente.
     const summary = (ev.summary ?? "Cita de Google Calendar").trim();
-    const parts = summary.split("—").map((s) => s.trim());
-    const clientName = parts.length >= 2 ? parts[1] : summary;
-    const serviceName = parts.length >= 3 ? parts[2] : "Consulta General";
+    const noEmoji = summary.replace(/^[🟢🟡🔴⏸️]\s*/, "");
+    let clientName = summary;
+    let clientPhone: string | null = null;
+    let serviceName = "Consulta General";
+    let importedStatus: "pending" | "confirmed" = "pending";
+    if (summary.startsWith("🟢")) importedStatus = "confirmed";
+    const slashParts = noEmoji.split("/").map((s) => s.trim());
+    if (slashParts.length >= 3) {
+      clientName = slashParts[0];
+      clientPhone = slashParts[1].replace(/\D/g, "") || null;
+      serviceName = slashParts.slice(2).join(" / ");
+    } else {
+      const parts = summary.split("—").map((s) => s.trim());
+      if (parts.length >= 2) {
+        clientName = parts[1];
+        serviceName = parts.length >= 3 ? parts[2] : "Consulta General";
+      }
+    }
 
     const { data: service } = await supabase
       .from("services")
@@ -194,7 +211,11 @@ export async function POST(req: Request) {
     } else {
       const { data: created } = await supabase
         .from("contacts")
-        .insert({ organization_id: organizationId, full_name: clientName })
+        .insert({
+          organization_id: organizationId,
+          full_name: clientName,
+          phone: clientPhone,
+        })
         .select("id")
         .single();
       contactId = (created as { id?: string } | null)?.id ?? null;
@@ -211,7 +232,8 @@ export async function POST(req: Request) {
       }));
     const clash = findConflict(startISO, duration, blocking as never, org.buffer_minutes);
     const inBreak = overlapsBreak(startISO, duration, org.break_start, org.break_end);
-    const status = clash || inBreak ? "conflict" : "pending";
+    // El emoji del título dice si ya estaba confirmada en Google.
+    const status = clash || inBreak ? "conflict" : importedStatus;
     if (status === "conflict") conflicts++;
     const { error: insertError } = await supabase.from("appointments").insert({
       organization_id: organizationId,
