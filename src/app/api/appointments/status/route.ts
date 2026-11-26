@@ -6,6 +6,11 @@
 // - confirmed: actualiza en Supabase, la sube/actualiza en Google
 //   Calendar (si está conectado) y manda la confirmación por WhatsApp
 //   (si está configurado y el paciente tiene teléfono).
+//   Si el interruptor "Confirmaciones de Vincimia" está apagado
+//   (organizations.vincimia_confirmations_enabled = false, migración
+//   010), la cita igual se confirma en Vincimia, pero NO se crea ni
+//   actualiza el evento en Google y NO se manda el WhatsApp: es el modo
+//   para mientras Confirmafy siga activo, para no empalmarse.
 // - cancelled: actualiza, borra su evento de Google y no manda WhatsApp.
 // - completed: actualiza (check-in) y actualiza su evento en Google.
 //   Además dispara el módulo de Reseñas: encola/manda por WhatsApp el
@@ -26,6 +31,7 @@ import {
   loadOrg,
   pushAppointmentToGoogle,
   queueReviewRequest,
+  vincimiaConfirmationsEnabled,
   type ReviewRequestResult,
 } from "@/lib/server-appointments";
 import {
@@ -97,7 +103,12 @@ export async function POST(req: Request) {
     reason: "No se manda WhatsApp para este estado.",
   };
   if (status === "confirmed") {
-    if (!whatsappConfigured()) {
+    if (!vincimiaConfirmationsEnabled(org)) {
+      whatsapp = {
+        done: false,
+        reason: "Confirmaciones de Vincimia apagadas (Confirmafy confirma).",
+      };
+    } else if (!whatsappConfigured()) {
       whatsapp = { done: false, reason: "WhatsApp no configurado en el servidor." };
     } else if (!org.whatsapp_bot_enabled) {
       whatsapp = { done: false, reason: "El bot está apagado para este negocio." };

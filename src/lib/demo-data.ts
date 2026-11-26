@@ -46,6 +46,8 @@ export const DEMO_ORG: Organization = {
   break_start: "14:00",
   break_end: "15:00",
   whatsapp_bot_enabled: false,
+  // Confirmaciones de Vincimia activas por defecto (igual que en la nube).
+  vincimia_confirmations_enabled: true,
   google_calendar_sync: false,
   connected_google_email: null,
   google_calendar_id: "primary",

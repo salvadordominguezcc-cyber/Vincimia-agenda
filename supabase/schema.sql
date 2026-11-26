@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS organizations (
   break_start TEXT,
   break_end TEXT,
   whatsapp_bot_enabled BOOLEAN NOT NULL DEFAULT false,
+  -- Interruptor de las confirmaciones de Vincimia (formato Confirmafy):
+  -- evento en Google + WhatsApp al confirmar. TRUE = como hoy; FALSE =
+  -- Confirmafy confirma y Vincimia no manda nada (migración 010).
+  vincimia_confirmations_enabled BOOLEAN NOT NULL DEFAULT true,
   -- Conexión a cuenta de Google Calendar secundaria/externa (Fase 1 completa).
   -- En el MVP quedan en false / NULL: NO hay token guardado ni conexión real.
   google_calendar_sync BOOLEAN NOT NULL DEFAULT false,

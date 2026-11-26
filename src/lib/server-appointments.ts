@@ -36,6 +36,10 @@ export interface OrgRow {
   google_calendar_id: string;
   google_refresh_token: string | null;
   whatsapp_bot_enabled: boolean;
+  /** Interruptor de confirmaciones de Vincimia (migración 010).
+   *  undefined = columna aún no aplicada en Supabase → se trata
+   *  como TRUE (comportamiento actual, sin cambios). */
+  vincimia_confirmations_enabled?: boolean | null;
   google_review_url: string | null;
 }
 
@@ -73,14 +77,26 @@ export async function loadOrg(
   supabase: SupabaseClient,
   organizationId: string
 ): Promise<OrgRow | null> {
-  const { data } = await supabase
+  const columns =
+    "id, name, slug, buffer_minutes, break_start, break_end, google_calendar_sync, connected_google_email, google_calendar_id, google_refresh_token, whatsapp_bot_enabled, vincimia_confirmations_enabled, google_review_url";
+  const { data, error } = await supabase
+    .from("organizations")
+    .select(columns)
+    .eq("id", organizationId)
+    .single();
+  if (!error) return (data as OrgRow | null) ?? null;
+  // La columna del interruptor aún no existe (migración 010 sin
+  // aplicar): se reintenta sin ella y el interruptor se trata como
+  // TRUE en vincimiaConfirmationsEnabled(). Sin este reintento, el
+  // select fallaría y la organización parecería no existir.
+  const fallback = await supabase
     .from("organizations")
     .select(
       "id, name, slug, buffer_minutes, break_start, break_end, google_calendar_sync, connected_google_email, google_calendar_id, google_refresh_token, whatsapp_bot_enabled, google_review_url"
     )
     .eq("id", organizationId)
     .single();
-  return (data as OrgRow | null) ?? null;
+  return (fallback.data as OrgRow | null) ?? null;
 }
 
 export async function loadAppointmentFull(
@@ -283,9 +299,21 @@ export type GooglePushResult =
   | { done: false; reason: string }
   | { done: true; action: "created" | "updated" | "deleted" | "skipped"; eventId: string | null };
 
+/** ¿Están prendidas las confirmaciones de Vincimia para este negocio?
+ *  Solo un FALSE explícito las apaga. undefined/null (columna aún no
+ *  aplicada, migración 010 pendiente) se trata como TRUE para no
+ *  cambiar el comportamiento en vivo sin que el dueño lo pida. */
+export function vincimiaConfirmationsEnabled(org: OrgRow): boolean {
+  return org.vincimia_confirmations_enabled !== false;
+}
+
 /** Empuja una cita a Google Calendar (o la borra si se canceló).
- *  No hace nada si Google no está conectado. Devuelve el motivo cuando
- *  no se pudo, para que el panel lo muestre en palabras normales. */
+ *  No hace nada si Google no está conectado. Si las confirmaciones de
+ *  Vincimia están apagadas (migración 010, Confirmafy sigue activo),
+ *  NO crea ni actualiza el evento con el formato Confirmafy: solo una
+ *  cancelación sigue borrando el evento que ya existía, para no dejar
+ *  citas canceladas en Google. Devuelve el motivo cuando no se pudo,
+ *  para que el panel lo muestre en palabras normales. */
 export async function pushAppointmentToGoogle(
   supabase: SupabaseClient,
   org: OrgRow,
@@ -293,6 +321,12 @@ export async function pushAppointmentToGoogle(
 ): Promise<GooglePushResult> {
   if (!org.google_calendar_sync || !org.google_refresh_token) {
     return { done: false, reason: "Google Calendar no conectado." };
+  }
+  if (!vincimiaConfirmationsEnabled(org) && appt.status !== "cancelled") {
+    return {
+      done: false,
+      reason: "Confirmaciones de Vincimia apagadas (Confirmafy confirma).",
+    };
   }
   let accessToken: string;
   try {

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadStore, type StoreData } from "@/lib/store";
 import { supabaseConfigured } from "@/lib/supabase";
-import { AlertTriangle, Calendar, FileSpreadsheet, MessageSquare } from "lucide-react";
+import { AlertTriangle, Bell, Calendar, FileSpreadsheet, MessageSquare } from "lucide-react";
 
 interface GoogleStatus {
   connected: boolean;
@@ -46,11 +46,20 @@ export default function ConectoresPage() {
   const [syncResult, setSyncResult] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [waBusy, setWaBusy] = useState(false);
+  // Interruptor de confirmaciones de Vincimia (formato Confirmafy).
+  // null = aún no se leyó el valor guardado.
+  const [confirmations, setConfirmations] = useState<boolean | null>(null);
+  const [confirmationsBusy, setConfirmationsBusy] = useState(false);
+  const [confirmationsNote, setConfirmationsNote] = useState("");
+  // Respaldo local cuando Supabase no está configurado (modo demo):
+  // el interruptor vive solo en este aparato y se dice así en la
+  // tarjeta; en la nube vive en organizations (migración 010).
+  const confirmationsLocalKey = (id: string) => `vincimia-confirmaciones-v1:${id}`;
 
   const orgId = data?.org.id ?? "";
   const secret = data?.org.excel_webhook_secret ?? "";
 
-  const loadStatuses = async (id: string) => {
+  const loadStatuses = async (id: string, orgSecret: string) => {
     try {
       const [g, w, m] = await Promise.all([
         fetch(`/api/google-calendar/status?organization_id=${id}`).then((r) => r.json()),
@@ -62,6 +71,28 @@ export default function ConectoresPage() {
       setMeta(m as MetaStatus);
     } catch {
       // Sin red, las tarjetas muestran su estado pendiente por defecto.
+    }
+    try {
+      const res = await fetch(`/api/confirmations/toggle?organization_id=${id}`, {
+        headers: { Authorization: `Bearer ${orgSecret}` },
+      });
+      const json = await res.json();
+      if (json.ok && typeof json.enabled === "boolean") {
+        setConfirmations(json.enabled);
+      } else {
+        setConfirmations(true);
+      }
+    } catch {
+      setConfirmations(true);
+    }
+  };
+
+  const loadConfirmationsLocal = (id: string) => {
+    try {
+      const saved = window.localStorage.getItem(confirmationsLocalKey(id));
+      setConfirmations(saved === null ? true : saved === "true");
+    } catch {
+      setConfirmations(true);
     }
   };
 
@@ -76,7 +107,8 @@ export default function ConectoresPage() {
         setGoogleBanner(q.get("message") ?? "No se pudo conectar Google Calendar.");
       }
     }
-    if (supabaseConfigured()) loadStatuses(d.org.id);
+    if (supabaseConfigured()) loadStatuses(d.org.id, d.org.excel_webhook_secret);
+    else loadConfirmationsLocal(d.org.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -131,7 +163,7 @@ export default function ConectoresPage() {
           ? json.message
           : `No se pudo sincronizar: ${json.message ?? "error desconocido"}`
       );
-      await loadStatuses(orgId);
+      await loadStatuses(orgId, secret);
     } catch (e) {
       setSyncResult(`Error: ${String(e)}`);
     } finally {
@@ -149,7 +181,7 @@ export default function ConectoresPage() {
       },
       body: JSON.stringify({ organization_id: orgId }),
     });
-    await loadStatuses(orgId);
+    await loadStatuses(orgId, secret);
   };
 
   const toggleWa = async (enabled: boolean) => {
@@ -165,9 +197,51 @@ export default function ConectoresPage() {
       });
       const json = await res.json();
       if (!json.ok) alert(json.message ?? "No se pudo cambiar el bot.");
-      await loadStatuses(orgId);
+      await loadStatuses(orgId, secret);
     } finally {
       setWaBusy(false);
+    }
+  };
+
+  const toggleConfirmations = async (enabled: boolean) => {
+    setConfirmationsBusy(true);
+    setConfirmationsNote("");
+    if (!supabaseConfigured()) {
+      // Modo demo: solo en este aparato, no en la nube.
+      try {
+        window.localStorage.setItem(confirmationsLocalKey(orgId), String(enabled));
+      } catch {
+        // Sin almacenamiento, el cambio solo vive en esta pantalla.
+      }
+      setConfirmations(enabled);
+      setConfirmationsNote(
+        enabled
+          ? "Guardado solo en este aparato (modo demo, sin nube)."
+          : "Guardado solo en este aparato (modo demo, sin nube)."
+      );
+      setConfirmationsBusy(false);
+      return;
+    }
+    try {
+      const res = await fetch("/api/confirmations/toggle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${secret}`,
+        },
+        body: JSON.stringify({ organization_id: orgId, enabled }),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        setConfirmationsNote(json.message ?? "No se pudo cambiar.");
+      } else {
+        setConfirmations(json.enabled === true);
+        setConfirmationsNote(json.message ?? "");
+      }
+    } catch (e) {
+      setConfirmationsNote(`Error: ${String(e)}`);
+    } finally {
+      setConfirmationsBusy(false);
     }
   };
 
@@ -406,6 +480,70 @@ export default function ConectoresPage() {
                 : "/api/webhook/whatsapp"}
             </code>
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className={confirmations === false ? "border-2 border-slate-300" : "border-2 border-green-300"}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-brand-600" />
+            Confirmaciones de Vincimia (formato Confirmafy)
+            <span
+              className={
+                confirmations === false
+                  ? "rounded-full bg-slate-200 px-2 py-1 text-xs font-medium text-slate-700"
+                  : "rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800"
+              }
+            >
+              {confirmations === null
+                ? "Cargando…"
+                : confirmations
+                  ? "Activo"
+                  : "Inactivo"}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p>
+            Cuando está <strong>activo</strong>, al confirmar una cita Vincimia
+            crea o actualiza el evento en Google Calendar con el formato
+            Confirmafy (título &quot;🟢 Nombre / teléfono / tratamiento&quot;,
+            color del doctor, recordatorio 30 minutos antes) y manda la
+            confirmación por WhatsApp al paciente.
+          </p>
+          <p>
+            Cuando está <strong>inactivo</strong>, al confirmar la cita solo
+            se guarda en Vincimia: no se crea ni actualiza nada en Google y
+            no se manda WhatsApp. Así Confirmafy sigue confirmando sin que
+            nada se empalme ni le lleguen dos mensajes al paciente.
+          </p>
+          {!supabaseConfigured() && (
+            <p className="text-slate-500">
+              En modo demo sin Supabase, este interruptor solo vive en este
+              aparato (no se guarda en la nube).
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {confirmations !== false ? (
+              <Button
+                variant="outline"
+                onClick={() => toggleConfirmations(false)}
+                disabled={confirmationsBusy || confirmations === null}
+              >
+                Apagar confirmaciones
+              </Button>
+            ) : (
+              <Button
+                onClick={() => toggleConfirmations(true)}
+                disabled={confirmationsBusy}
+              >
+                Prender confirmaciones
+              </Button>
+            )}
+          </div>
+          {confirmationsNote && (
+            <p className="rounded-lg bg-slate-100 p-3 text-sm">{confirmationsNote}</p>
+          )}
         </CardContent>
       </Card>
 

@@ -96,6 +96,12 @@ export interface Organization {
   break_start: string | null;
   break_end: string | null;
   whatsapp_bot_enabled: boolean;
+  /** Interruptor de las confirmaciones de Vincimia (formato Confirmafy):
+   *  evento en Google Calendar + WhatsApp al confirmar. TRUE = activas
+   *  (comportamiento actual); FALSE = Confirmafy confirma y Vincimia no
+   *  manda nada, para no empalmarse. Migración 010; undefined (columna
+   *  aún no aplicada) se trata como TRUE. Se cambia en Conectores. */
+  vincimia_confirmations_enabled?: boolean;
   /** Bot de Messenger (Facebook) e Instagram por negocio, igual que
    *  whatsapp_bot_enabled. Se activan en Conectores cuando cada canal
    *  ya está autorizado en Meta (migración 009). */

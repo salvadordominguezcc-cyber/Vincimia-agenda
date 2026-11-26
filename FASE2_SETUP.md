@@ -190,6 +190,33 @@ grupo sigue siendo manual, pero ya con la tarjeta llena.
   `/api/appointments/status` trae `owner_notify` con `done` y el
   motivo cuando no se pudo mandar.
 
+### 3.4b Interruptor de confirmaciones de Vincimia (para no empalmarse con Confirmafy)
+
+Mientras Confirmafy siga activo, en **Conectores → Confirmaciones de
+Vincimia (formato Confirmafy)** hay un interruptor por negocio:
+
+- **Activo (por defecto):** al confirmar, Vincimia crea/actualiza el
+  evento en Google Calendar con el formato Confirmafy y manda el
+  WhatsApp al paciente.
+- **Inactivo:** al confirmar, la cita solo se guarda en Vincimia; no se
+  crea ni actualiza el evento en Google y no se manda WhatsApp al
+  paciente. Confirmafy sigue confirmando sin que nada se empalme ni le
+  lleguen dos mensajes al paciente. Cuando se cancele Confirmafy, se
+  vuelve a prender.
+
+El valor vive en `organizations.vincimia_confirmations_enabled`
+(**migración 010**: `supabase/migrations/010_confirmfy_toggle.sql`,
+aplicarla en Supabase → SQL Editor antes de usar el interruptor; sin
+ella el POST responde 503 y el comportamiento sigue siendo "activo").
+El interruptor se guarda con la ruta `POST /api/confirmations/toggle`
+(mismo secreto Bearer que el bot) y se lee con
+`GET /api/confirmations/toggle`. El servidor lo respeta en
+`/api/appointments/status` (WhatsApp) y en `pushAppointmentToGoogle`
+(evento en Google, también en la sincronización manual). La cancelación
+sí sigue borrando en Google el evento que ya existía. El aviso interno
+al dueño (tarjeta FORMATO DE CITA) y la solicitud de reseña al
+completar no dependen de este interruptor: no llegan al paciente.
+
 ### 3.5 Costo de los mensajes (Meta)
 
 - Los mensajes que **manda el paciente nunca se cobran**.
