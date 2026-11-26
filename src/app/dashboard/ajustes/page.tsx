@@ -54,6 +54,8 @@ export default function AjustesPage() {
   const [breakStart, setBreakStart] = useState("");
   const [breakEnd, setBreakEnd] = useState("");
   const [googleEmail, setGoogleEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [hoursText, setHoursText] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -83,6 +85,8 @@ export default function AjustesPage() {
     setBreakStart(d.org.break_start ?? "");
     setBreakEnd(d.org.break_end ?? "");
     setGoogleEmail(d.org.connected_google_email ?? "");
+    setAddress(d.org.address ?? "");
+    setHoursText(d.org.hours_text ?? "");
     // Al entrar, los datos del negocio y el catálogo de la nube
     // mandan: si en la nube cambió el nombre, el enlace, el descanso
     // o hay servicios/doctores nuevos, se ven aquí sin duplicar.
@@ -97,6 +101,8 @@ export default function AjustesPage() {
           setBreakStart(merged.org.break_start ?? "");
           setBreakEnd(merged.org.break_end ?? "");
           setGoogleEmail(merged.org.connected_google_email ?? "");
+          setAddress(merged.org.address ?? "");
+          setHoursText(merged.org.hours_text ?? "");
         })
         .catch(() => {
           // Sin conexión a la nube se sigue con lo del aparato.
@@ -188,6 +194,8 @@ export default function AjustesPage() {
         break_start: cleanBreakStart || null,
         break_end: cleanBreakEnd || null,
         connected_google_email: cleanEmail || null,
+        address: address.trim() || null,
+        hours_text: hoursText.trim() || null,
       },
     };
     saveStore(next);
@@ -210,6 +218,8 @@ export default function AjustesPage() {
         break_start: cleanBreakStart || null,
         break_end: cleanBreakEnd || null,
         connected_google_email: cleanEmail || null,
+        address: address.trim() || null,
+        hours_text: hoursText.trim() || null,
       });
       if (!result.ok) {
         if (String(result.message).includes("ya lo usa otro negocio")) {
@@ -223,7 +233,7 @@ export default function AjustesPage() {
         }
         return;
       }
-      setMessage("Listo, ya se guardaron los datos de tu negocio.");
+      setMessage(result.message || "Listo, ya se guardaron los datos de tu negocio.");
     } catch {
       setError(
         "Se guardó aquí, pero no se pudo guardar en la nube. Revisa tu conexión e inténtalo de nuevo."
@@ -448,6 +458,28 @@ export default function AjustesPage() {
                   </code>
                 </p>
               )}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Dirección de la clínica</label>
+              <Input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Ejemplo: Plaza Pepys, Calz. Independencia y Blvd. López Mateos, 2do piso, Local 5, Mexicali"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Así sale en el link de reserva y en la tarjeta de la cita.
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Horario de atención</label>
+              <Input
+                value={hoursText}
+                onChange={(e) => setHoursText(e.target.value)}
+                placeholder="Ejemplo: Lunes a Sábado 9:00 am a 6:00 pm"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Así sale en el link de reserva, junto a la dirección.
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium">

@@ -102,6 +102,13 @@ export function mergeCatalogIntoStore(
         // correo", y manda sobre lo viejo del aparato.
         break_start: o.break_start !== undefined ? (o.break_start as string | null) : next.org.break_start,
         break_end: o.break_end !== undefined ? (o.break_end as string | null) : next.org.break_end,
+        // Dirección y horario (migración 011): si la nube los trae,
+        // mandan; si no vienen (columna aún no aplicada), se conserva
+        // lo del aparato.
+        address:
+          o.address !== undefined ? ((o.address as string | null) ?? null) : next.org.address,
+        hours_text:
+          o.hours_text !== undefined ? ((o.hours_text as string | null) ?? null) : next.org.hours_text,
         connected_google_email:
           o.connected_google_email !== undefined
             ? (o.connected_google_email as string | null)
@@ -222,7 +229,10 @@ export async function saveDoctorToCloud(data: StoreData, doctor: Doctor): Promis
   return saveCatalogRow(data, "/api/catalog/doctors", { doctor });
 }
 
-/** Guarda los datos del negocio (Ajustes) en la nube. */
+/** Guarda los datos del negocio (Ajustes) en la nube. Si la nube
+ *  devuelve pending_columns (migración 011 aún no aplicada), la
+ *  dirección y el horario quedaron guardados en este aparato y el
+ *  mensaje lo dice claro. */
 export async function saveOrgToCloud(
   data: StoreData,
   patch: {
@@ -232,9 +242,28 @@ export async function saveOrgToCloud(
     break_start: string | null;
     break_end: string | null;
     connected_google_email: string | null;
+    address: string | null;
+    hours_text: string | null;
   }
 ): Promise<CloudSaveResult> {
-  return saveCatalogRow(data, "/api/catalog/org", patch);
+  if (!supabaseConfigured()) return cloudDisabled();
+  try {
+    const json = (await authedFetch(data.org.id, data.org.excel_webhook_secret, "/api/catalog/org", {
+      method: "POST",
+      body: JSON.stringify({ organization_id: data.org.id, ...patch }),
+    })) as Record<string, unknown>;
+    const pending = Array.isArray(json.pending_columns) ? (json.pending_columns as string[]) : [];
+    return {
+      ok: true,
+      message:
+        pending.length > 0
+          ? "Guardado en la nube. La dirección y el horario quedaron en este aparato: falta aplicar la migración 011 en Supabase para que también se guarden en la nube."
+          : "Guardado en la nube.",
+      row: json as Record<string, unknown>,
+    };
+  } catch (e) {
+    return { ok: false, message: String(e) };
+  }
 }
 
 export interface CatalogUploadResult {

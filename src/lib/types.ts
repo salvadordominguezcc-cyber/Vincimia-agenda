@@ -136,6 +136,16 @@ export interface Organization {
   name: string;
   slug: string;
   buffer_minutes: number;
+  /** Dirección de la clínica tal como sale en el link de reserva y
+   *  en la tarjeta de la cita (ej. "Plaza Pepys, Calz. Independencia
+   *  y Blvd. López Mateos, 2do piso, Local 5, Mexicali"). Se edita
+   *  en Ajustes; en la nube vive con la migración 011 (si aún no
+   *  está aplicada, el valor queda en este aparato). */
+  address?: string | null;
+  /** Horario de atención tal como sale en el link (ej. "Lunes a
+   *  Sábado 9:00 am a 6:00 pm"). Se edita en Ajustes; en la nube
+   *  vive con la migración 011. */
+  hours_text?: string | null;
   /** Tiempo de descanso de la clínica, ej. "14:00"–"15:00". null = sin
    *  descanso. En esa hora no se muestran ni se permiten citas. */
   break_start: string | null;

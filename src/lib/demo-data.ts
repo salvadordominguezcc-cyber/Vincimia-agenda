@@ -43,6 +43,11 @@ export const DEMO_ORG: Organization = {
   name: "Clínica Dental Sonrisa",
   slug: "clinica-sonrisa",
   buffer_minutes: 15,
+  // Datos reales de la clínica piloto (Dentiplus Mexicali): son el
+  // valor inicial y se cambian en Ajustes, donde también se guardan
+  // en la nube. El nombre real viene de la nube al mezclar.
+  address: "Plaza Pepys, Calz. Independencia y Blvd. López Mateos, 2do piso, Local 5, Mexicali",
+  hours_text: "Lunes a Sábado 9:00 am a 6:00 pm",
   break_start: "14:00",
   break_end: "15:00",
   whatsapp_bot_enabled: false,

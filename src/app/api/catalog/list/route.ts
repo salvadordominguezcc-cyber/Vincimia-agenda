@@ -9,7 +9,7 @@
 export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
-import { authSecret, verifyOrgSecret } from "@/lib/server-catalog";
+import { authSecret, fetchOrgForCatalog, verifyOrgSecret } from "@/lib/server-catalog";
 
 export async function GET(req: Request) {
   const supabase = supabaseServer();
@@ -25,22 +25,16 @@ export async function GET(req: Request) {
     );
   }
   const [org, services, doctors] = await Promise.all([
-    supabase
-      .from("organizations")
-      .select(
-        "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled"
-      )
-      .eq("id", organizationId)
-      .single(),
+    fetchOrgForCatalog(supabase, "id", organizationId),
     supabase.from("services").select("*").eq("organization_id", organizationId),
     supabase.from("doctors").select("*").eq("organization_id", organizationId),
   ]);
-  if (!org.data) {
+  if (!org) {
     return Response.json({ ok: false, message: "Organización no encontrada." }, { status: 404 });
   }
   return Response.json({
     ok: true,
-    org: org.data,
+    org,
     services: services.data ?? [],
     doctors: doctors.data ?? [],
   });

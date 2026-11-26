@@ -41,6 +41,8 @@ export async function POST(req: Request) {
     break_start: body.break_start as string | null | undefined,
     break_end: body.break_end as string | null | undefined,
     connected_google_email: body.connected_google_email as string | null | undefined,
+    address: body.address as string | null | undefined,
+    hours_text: body.hours_text as string | null | undefined,
   };
   const result = await updateOrgSettings(supabase, organizationId, input);
   if (!result.ok) {
@@ -50,7 +52,17 @@ export async function POST(req: Request) {
         { status: 409 }
       );
     }
+    if (result.error === "pending-migration-011") {
+      return Response.json(
+        {
+          ok: false,
+          message:
+            "La dirección y el horario aún no se pueden guardar en la nube: falta aplicar la migración 011 en Supabase.",
+        },
+        { status: 400 }
+      );
+    }
     return Response.json({ ok: false, message: result.error }, { status: 400 });
   }
-  return Response.json({ ok: true, org: result.row });
+  return Response.json({ ok: true, org: result.row, pending_columns: result.pending_columns ?? [] });
 }

@@ -8,6 +8,7 @@
 export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
+import { fetchOrgForCatalog } from "@/lib/server-catalog";
 
 export async function GET(req: Request) {
   const supabase = supabaseServer();
@@ -19,11 +20,7 @@ export async function GET(req: Request) {
   if (!slug) {
     return Response.json({ ok: false, message: "Falta el enlace del negocio." }, { status: 400 });
   }
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("id, name, slug, buffer_minutes, break_start, break_end")
-    .eq("slug", slug)
-    .single();
+  const org = await fetchOrgForCatalog(supabase, "slug", slug);
   if (!org) {
     return Response.json({ ok: false, message: "Negocio no encontrado." }, { status: 404 });
   }

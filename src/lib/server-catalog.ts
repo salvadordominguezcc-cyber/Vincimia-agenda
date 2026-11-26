@@ -110,6 +110,11 @@ export interface OrgSettingsInput {
   break_start?: string | null;
   break_end?: string | null;
   connected_google_email?: string | null;
+  /** Dirección y horario de atención (migración 011). Si esas
+   *  columnas aún no existen en la nube, se guardan los demás
+   *  datos y estas dos quedan pendientes (ver updateOrgSettings). */
+  address?: string | null;
+  hours_text?: string | null;
 }
 
 type UpsertResult =
@@ -244,13 +249,18 @@ export async function upsertDoctor(
 
 /** Actualiza los datos del negocio (Ajustes). Devuelve
  *  { ok:false, error:"slug-taken" } si el enlace ya lo usa otro
- *  negocio, para que el panel lo diga en palabras normales. */
+ *  negocio, para que el panel lo diga en palabras normales.
+ *  Resistencia a la migración 011: si las columnas address /
+ *  hours_text aún no existen en la nube (error 42703), se guardan
+ *  los demás datos y se devuelve pending_columns con esas dos, para
+ *  que el panel avise que quedaron en este aparato hasta aplicar
+ *  la migración. Nunca se pierde el resto del guardado por eso. */
 export async function updateOrgSettings(
   supabase: SupabaseClient,
   organizationId: string,
   input: OrgSettingsInput
 ): Promise<
-  | { ok: true; row: Record<string, unknown> }
+  | { ok: true; row: Record<string, unknown>; pending_columns?: string[] }
   | { ok: false; error: string }
 > {
   const patch: Record<string, unknown> = {};
@@ -290,20 +300,90 @@ export async function updateOrgSettings(
     }
     patch.connected_google_email = email || null;
   }
+  if (input.address !== undefined) {
+    patch.address = String(input.address ?? "").trim() || null;
+  }
+  if (input.hours_text !== undefined) {
+    patch.hours_text = String(input.hours_text ?? "").trim() || null;
+  }
   if (Object.keys(patch).length === 0) {
     return { ok: false, error: "No hay nada que guardar." };
   }
+  const fullSelect =
+    "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled, address, hours_text";
+  const legacySelect =
+    "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled";
   const { data, error } = await supabase
     .from("organizations")
     .update(patch)
     .eq("id", organizationId)
-    .select("id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled")
+    .select(fullSelect)
     .single();
-  if (error) {
-    if ((error as { code?: string }).code === "23505") {
-      return { ok: false, error: "slug-taken" };
-    }
-    return { ok: false, error: error.message };
+  if (!error) {
+    return { ok: true, row: data as Record<string, unknown> };
   }
-  return { ok: true, row: data as Record<string, unknown> };
+  if ((error as { code?: string }).code === "23505") {
+    return { ok: false, error: "slug-taken" };
+  }
+  // Columna de la migración 011 aún no aplicada: reintentar sin
+  // address/hours_text para no perder el resto del guardado.
+  const missingColumn =
+    (error as { code?: string }).code === "42703" ||
+    /address|hours_text/.test(String((error as { message?: string }).message ?? ""));
+  if (missingColumn && ("address" in patch || "hours_text" in patch)) {
+    const { address: _a, hours_text: _h, ...legacyPatch } = patch;
+    if (Object.keys(legacyPatch).length === 0) {
+      return { ok: false, error: "pending-migration-011" };
+    }
+    const retry = await supabase
+      .from("organizations")
+      .update(legacyPatch)
+      .eq("id", organizationId)
+      .select(legacySelect)
+      .single();
+    if (retry.error) {
+      if ((retry.error as { code?: string }).code === "23505") {
+        return { ok: false, error: "slug-taken" };
+      }
+      return { ok: false, error: retry.error.message };
+    }
+    return {
+      ok: true,
+      row: retry.data as Record<string, unknown>,
+      pending_columns: ["address", "hours_text"],
+    };
+  }
+  return { ok: false, error: error.message };
+}
+
+/** Lee la fila del negocio para el catálogo (panel o link). Prueba
+ *  con las columnas de la migración 011 y, si aún no existen en la
+ *  nube, reintenta con la lista anterior: la sincronización del
+ *  catálogo nunca debe romperse por una columna nueva. */
+export async function fetchOrgForCatalog(
+  supabase: SupabaseClient,
+  field: "id" | "slug",
+  value: string
+): Promise<Record<string, unknown> | null> {
+  const fullSelect =
+    "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled, address, hours_text";
+  const legacySelect =
+    "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled";
+  const first = await supabase
+    .from("organizations")
+    .select(fullSelect)
+    .eq(field, value)
+    .single();
+  if (first.data) return first.data as Record<string, unknown>;
+  if (!first.error) return null;
+  const missingColumn =
+    (first.error as { code?: string }).code === "42703" ||
+    /address|hours_text/.test(String((first.error as { message?: string }).message ?? ""));
+  if (!missingColumn) return null;
+  const retry = await supabase
+    .from("organizations")
+    .select(legacySelect)
+    .eq(field, value)
+    .single();
+  return (retry.data as Record<string, unknown> | null) ?? null;
 }

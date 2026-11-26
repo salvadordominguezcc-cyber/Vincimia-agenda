@@ -1,3 +1,15 @@
+// Link público de reserva — mismo formulario y misma tarjeta TU CITA
+// que Nueva cita del panel (/dashboard/nueva). El encabezado con
+// Dr. Denti, los campos, el botón rosa y la tarjeta viven en
+// src/components/BookingDesign.tsx y las dos rutas los usan igual.
+//
+// La lógica de guardado no cambió: primero se guarda aquí mismo
+// (anti-empalme local); luego se intenta crearla en la nube y, si
+// la nube la recibe, la cita local adopta el id de la nube para que
+// el panel la vea como cita de la nube y al confirmarla dispare
+// Google + WhatsApp + aviso al dueño. Si la nube no la recibe, la
+// cita queda solo en este aparato y la tarjeta lo dice claro.
+
 "use client";
 
 export const runtime = "edge";
@@ -14,30 +26,18 @@ import {
   loadStore,
   type StoreData,
 } from "@/lib/store";
-import { money, SPECIALTY_LABEL, type Appointment } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { DoctorChip } from "@/components/DoctorChip";
-import { Logo } from "@/components/Logo";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { AlertTriangle, CheckCircle2, Download, Info, MessageCircle } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  AppointmentCardView,
+  BookingFields,
+  ClinicBookingHeader,
+} from "@/components/BookingDesign";
 import { fetchPublicCatalog, mergeCatalogIntoStore } from "@/lib/cloud-sync";
-import {
-  formatPhoneDisplay,
-  normalizePhone,
-  PHONE_COUNTRIES,
-  type PhoneCountry,
-} from "@/lib/phone";
-import {
-  buildWhatsAppShareUrl,
-  CLINIC_WHATSAPP_DISPLAY,
-  formatFechaLarga,
-  formatHora12,
-  formatPrecio,
-  receptionNote,
-  saveAppointmentCard,
-  type AppointmentCardData,
-} from "@/lib/appointment-card";
+import { formatPhoneDisplay, normalizePhone, type PhoneCountry } from "@/lib/phone";
+import type { AppointmentCardData } from "@/lib/appointment-card";
+import type { Appointment } from "@/lib/types";
+import { AlertTriangle } from "lucide-react";
 
 export default function ReservaPage({
   params,
@@ -70,9 +70,9 @@ export default function ReservaPage({
    *  porque el enlace real (clinica-dentiplus) solo vive en la nube
    *  y en este aparato todavía está el demo. */
   const [catalogLoaded, setCatalogLoaded] = useState(false);
-  /** Guardado de la tarjeta "TU CITA" como imagen en el teléfono. */
-  const [savingCard, setSavingCard] = useState(false);
-  const [saveCardMsg, setSaveCardMsg] = useState("");
+  /** Datos de la tarjeta "TU CITA" que se muestra al registrarse:
+   *  solo valores reales de la reserva y del negocio, nada inventado. */
+  const [doneCard, setDoneCard] = useState<AppointmentCardData | null>(null);
 
   useEffect(() => {
     const d = loadStore();
@@ -131,42 +131,10 @@ export default function ReservaPage({
 
   const service = data.services.find((s) => s.id === serviceId);
   const doctor = doctorById(data, doctorId || null);
-  /** Datos de la tarjeta "TU CITA" que se muestra al registrarse:
-   *  solo valores reales de la reserva y del negocio, nada inventado. */
   /** Teléfono completo en internacional sin "+" (52… México,
    *  1… Estados Unidos) según el país elegido. Así se guarda en
    *  la nube y en este aparato, y así se muestra en la tarjeta. */
   const fullPhone = normalizePhone(clientPhone, phoneCountry) ?? clientPhone;
-  const cardData: AppointmentCardData | null =
-    done && service
-      ? {
-          clinicName: data.org.name,
-          patientName: clientName,
-          phone: formatPhoneDisplay(fullPhone),
-          date,
-          time,
-          serviceName: service.name,
-          doctorName: doctor?.name ?? null,
-          price: service.price,
-          status: doneOnHold ? "En pausa" : "Pendiente por confirmar",
-        }
-      : null;
-  const saveCard = async () => {
-    if (!cardData || savingCard) return;
-    setSavingCard(true);
-    setSaveCardMsg("");
-    const res = await saveAppointmentCard(cardData);
-    setSavingCard(false);
-    if (res.ok) {
-      setSaveCardMsg(
-        res.method === "share"
-          ? "Se abrió para compartir o guardar la imagen."
-          : "Imagen descargada en tu teléfono."
-      );
-    } else if (!res.aborted) {
-      setSaveCardMsg(res.message);
-    }
-  };
   const slots = service
     ? freeSlots(
         date,
@@ -178,6 +146,22 @@ export default function ReservaPage({
         { start: data.org.break_start, end: data.org.break_end }
       )
     : [];
+
+  const resetForm = () => {
+    setClientName("");
+    setClientPhone("");
+    setPhoneCountry("MX");
+    setServiceId(data.services[0]?.id ?? "");
+    setDoctorId("");
+    setDate(todayISO());
+    setTime("");
+    setConflict(null);
+    setError("");
+    setDone(false);
+    setDoneOnHold(false);
+    setLocalOnly(false);
+    setDoneCard(null);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,6 +240,19 @@ export default function ReservaPage({
     } finally {
       setSubmitting(false);
     }
+    if (service) {
+      setDoneCard({
+        clinicName: data.org.name,
+        patientName: clientName,
+        phone: formatPhoneDisplay(fullPhone),
+        date,
+        time,
+        serviceName: service.name,
+        doctorName: doctor?.name ?? null,
+        price: service.price,
+        status: onHold ? "En pausa" : "Pendiente por confirmar",
+      });
+    }
     setLocalOnly(onlyLocal);
     setDoneOnHold(onHold);
     setDone(true);
@@ -263,347 +260,63 @@ export default function ReservaPage({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-2xl items-center gap-2 px-4 py-4">
-          <Logo />
-          <div>
-            <p className="font-bold leading-tight">Vincimia Agenda</p>
-            <p className="text-xs text-slate-500">Reserva en línea</p>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-2xl px-4 py-8">
-        {done && cardData ? (
-          <div className="space-y-4">
-            <div className="text-center">
-              <CheckCircle2 className="mx-auto h-12 w-12 text-green-600" />
-              <h1 className="mt-3 text-2xl font-bold text-[#1e1b4b]">
-                ¡Cita registrada, {clientName}!
-              </h1>
-            </div>
-            {/* Tarjeta TU CITA: los datos ordenados para que el
-                paciente los guarde y los presente en recepción. */}
-            <Card className="overflow-hidden border-2 border-[#e0f2fe]">
-              <div className="bg-[#5b21b6] px-4 py-3 text-center">
-                <p className="text-xl font-extrabold tracking-wide text-white">
-                  TU CITA
-                </p>
-              </div>
-              <CardContent className="divide-y divide-slate-200 px-5 py-2">
-                {[
-                  { label: "Clínica", value: cardData.clinicName },
-                  { label: "Paciente", value: cardData.patientName },
-                  { label: "Teléfono", value: cardData.phone },
-                  { label: "Fecha", value: formatFechaLarga(cardData.date) },
-                  { label: "Hora", value: formatHora12(cardData.time) },
-                  { label: "Tratamiento", value: cardData.serviceName },
-                  {
-                    label: "Doctor",
-                    value: cardData.doctorName ?? "Sin preferencia",
-                  },
-                  { label: "Precio", value: formatPrecio(cardData.price) },
-                ].map((row) => (
-                  <div
-                    key={row.label}
-                    className="grid grid-cols-[110px_1fr] gap-2 py-2.5 text-left"
-                  >
-                    <span className="font-semibold text-slate-500">
-                      {row.label}:
-                    </span>
-                    <span className="font-semibold text-slate-900">
-                      {row.value}
-                    </span>
-                  </div>
-                ))}
-                <div className="grid grid-cols-[110px_1fr] gap-2 py-2.5 text-left">
-                  <span className="font-semibold text-slate-500">Estado:</span>
-                  <span className="font-bold text-amber-600">
-                    {cardData.status}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-            {/* Aviso de recepción + estado real de la cita. */}
-            <div className="rounded-2xl bg-cyan-100 p-4">
-              <p className="flex items-start gap-2 text-left font-semibold text-[#0e7490]">
-                <Info className="mt-0.5 h-5 w-5 shrink-0" />
-                {receptionNote(cardData)}
-              </p>
-              <p className="mt-3 text-left text-sm text-slate-600">
-                {doneOnHold ? (
-                  <>
-                    Tu cita quedó <strong>en pausa</strong>: este doctor solo
-                    atiende con cita y anticipo. La clínica revisará los
-                    horarios del doctor y te propondrá cuándo puede atenderte.
-                    Cuando aceptes, tu cita se confirma. Todavía no se cobra
-                    nada en línea.
-                  </>
-                ) : localOnly ? (
-                  <>
-                    Quedó en <strong>pendiente</strong>, pero solo se guardó
-                    en este aparato: no se pudo sincronizar con la agenda de
-                    la clínica, así que todavía no llega a Google Calendar ni
-                    te llegará la confirmación por WhatsApp. Avísale a la
-                    clínica para que la registre.
-                  </>
-                ) : (
-                  <>
-                    Quedó en <strong>pendiente</strong>. La clínica te
-                    confirmará por WhatsApp.
-                  </>
-                )}
-              </p>
-              <div className="mt-4 space-y-2">
-                <Button
-                  type="button"
-                  onClick={saveCard}
-                  disabled={savingCard}
-                  className="w-full bg-[#ec4899] py-6 text-base font-bold text-white hover:bg-[#db2777]"
-                >
-                  <Download className="mr-2 h-5 w-5" />
-                  {savingCard ? "Guardando…" : "Guardar mi cita"}
-                </Button>
-                <a
-                  href={buildWhatsAppShareUrl(cardData)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex w-full items-center justify-center rounded-lg border-2 border-green-600 bg-white px-4 py-3 text-base font-bold text-green-700"
-                >
-                  <MessageCircle className="mr-2 h-5 w-5" />
-                  Compartir por WhatsApp
-                </a>
-                {saveCardMsg && (
-                  <p className="text-center text-sm font-medium text-green-700">
-                    {saveCardMsg}
-                  </p>
-                )}
-              </div>
-            </div>
-            {!localOnly && (
-              <p className="text-center text-sm text-slate-500">
-                Te confirmamos tu cita por WhatsApp al{" "}
-                {CLINIC_WHATSAPP_DISPLAY}.
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-8">
+        {done && doneCard ? (
+          <AppointmentCardView
+            card={doneCard}
+            title={`¡Cita registrada, ${clientName}!`}
+            context="link"
+            onHold={doneOnHold}
+            localOnly={localOnly}
+            onCreateAnother={resetForm}
+          />
+        ) : (
+          <>
+            <ClinicBookingHeader org={data.org} />
+            {conflict && (
+              <p className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                Ese horario se acaba de ocupar por{" "}
+                {contactName(data, conflict.contact_id)}. Elige otro horario
+                libre de la lista.
               </p>
             )}
-            <div className="text-center">
-              <Link href="/dashboard">
-                <Button variant="outline">Verla en la agenda (demo)</Button>
-              </Link>
-            </div>
-          </div>
-        ) : done ? (
-          <Card>
-            <CardContent className="py-10 text-center">
-              <CheckCircle2 className="mx-auto h-10 w-10 text-green-600" />
-              <h1 className="mt-3 text-xl font-bold">
-                ¡Cita registrada, {clientName}!
-              </h1>
-              <p className="mt-2 text-slate-600">
-                {service?.name} · {date} a las {time} · {service && money(service.price)}
+            {error && (
+              <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                {error}
               </p>
-              {doctor && (
-                <p className="mt-1 text-sm text-slate-600">
-                  Con <DoctorChip name={doctor.name} color={doctor.color} /> ·{" "}
-                  {SPECIALTY_LABEL[doctor.specialty]}
-                </p>
-              )}
-              <p className="mt-1 text-sm text-slate-500">
-                {doneOnHold ? (
-                  <>
-                    Tu cita quedó <strong>en pausa</strong>: este doctor solo
-                    atiende con cita y anticipo. La clínica revisará los
-                    horarios del doctor y te propondrá cuándo puede atenderte.
-                    Cuando aceptes, tu cita se confirma. Todavía no se cobra
-                    nada en línea.
-                  </>
-                ) : localOnly ? (
-                  <>
-                    Quedó en <strong>pendiente</strong>, pero solo se guardó
-                    en este aparato: no se pudo sincronizar con la agenda de
-                    la clínica, así que todavía no llega a Google Calendar ni
-                    te llegará la confirmación por WhatsApp. Avísale a la
-                    clínica para que la registre.
-                  </>
-                ) : (
-                  <>
-                    Quedó en <strong>pendiente</strong>. La clínica te
-                    confirmará por WhatsApp.
-                  </>
-                )}
-              </p>
-              <Link href="/dashboard" className="mt-5 inline-block">
-                <Button variant="outline">Verla en la agenda (demo)</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Reserva tu cita — {data.org.name}</CardTitle>
-              <p className="text-sm text-slate-500">
-                Solo se muestran horarios libres: el motor anti-empalmes ya
-                quitó los ocupados y el buffer de {data.org.buffer_minutes}{" "}
-                min.
-                {data.org.break_start && data.org.break_end && (
-                  <>
-                    {" "}Tiempo de descanso de {data.org.break_start} a{" "}
-                    {data.org.break_end}: en esa hora no hay citas.
-                  </>
-                )}
-              </p>
-            </CardHeader>
-            <CardContent>
-              {conflict && (
-                <p className="mb-4 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  Ese horario se acaba de ocupar por{" "}
-                  {contactName(data, conflict.contact_id)}. Elige otro horario
-                  libre de la lista.
-                </p>
-              )}
-              {error && (
-                <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
-                  {error}
-                </p>
-              )}
-              <form onSubmit={submit} className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">Tu nombre *</label>
-                  <Input
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="Nombre completo"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Teléfono *</label>
-                  <div className="flex gap-2">
-                    <select
-                      value={phoneCountry}
-                      onChange={(e) =>
-                        setPhoneCountry(e.target.value as PhoneCountry)
-                      }
-                      aria-label="País del teléfono"
-                      className="h-10 shrink-0 rounded-lg border border-slate-300 bg-white px-2 text-sm"
-                    >
-                      {PHONE_COUNTRIES.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.label} {c.prefix}
-                        </option>
-                      ))}
-                    </select>
-                    <Input
-                      value={clientPhone}
-                      onChange={(e) => setClientPhone(e.target.value)}
-                      placeholder={
-                        phoneCountry === "US" ? "+1 …" : "+52 …"
-                      }
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Servicio *</label>
-                  <select
-                    value={serviceId}
-                    onChange={(e) => {
-                      setServiceId(e.target.value);
-                      setTime("");
-                    }}
-                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
-                  >
-                    {data.services
-                      .filter((s) => s.active)
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} · {s.duration_minutes} min ·{" "}
-                          {money(s.price)}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Doctor (opcional)</label>
-                  <select
-                    value={doctorId}
-                    onChange={(e) => {
-                      setDoctorId(e.target.value);
-                      setTime("");
-                    }}
-                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
-                  >
-                    <option value="">Sin preferencia</option>
-                    {data.doctors
-                      .filter((d) => d.active)
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name} · {SPECIALTY_LABEL[d.specialty]}
-                        </option>
-                      ))}
-                  </select>
-                  {doctor && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      Solo se muestran los horarios en los que atiende{" "}
-                      {doctor.name}.
-                      {doctor.requires_deposit && (
-                        <span className="mt-1 block rounded-lg bg-amber-50 p-2 font-medium text-amber-800">
-                          Este doctor solo atiende con cita y anticipo: tu
-                          cita quedará en pausa hasta que la clínica confirme
-                          los horarios y tú aceptes. No se bloquea el horario
-                          de inmediato.
-                        </span>
-                      )}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Fecha *</label>
-                  <Input
-                    type="date"
-                    value={date}
-                    onChange={(e) => {
-                      setDate(e.target.value);
-                      setTime("");
-                    }}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">
-                    Horarios libres *
-                  </label>
-                  {slots.length === 0 ? (
-                    <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                      No quedan horarios libres ese día para este servicio.
-                      Prueba otra fecha.
-                    </p>
-                  ) : (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {slots.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => setTime(s)}
-                          className={
-                            time === s
-                              ? "rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white"
-                              : "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm hover:bg-slate-50"
-                          }
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <Button type="submit" className="w-full" disabled={!time || submitting}>
-                  {submitting ? "Registrando…" : "Reservar cita"}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+            )}
+            <BookingFields
+              data={data}
+              clientName={clientName}
+              onClientName={setClientName}
+              clientPhone={clientPhone}
+              onClientPhone={setClientPhone}
+              phoneCountry={phoneCountry}
+              onPhoneCountry={setPhoneCountry}
+              serviceId={serviceId}
+              onServiceId={(v) => {
+                setServiceId(v);
+                setTime("");
+              }}
+              doctorId={doctorId}
+              onDoctorId={(v) => {
+                setDoctorId(v);
+                setTime("");
+              }}
+              date={date}
+              onDate={(v) => {
+                setDate(v);
+                setTime("");
+              }}
+              time={time}
+              onTime={setTime}
+              slots={slots}
+              submitting={submitting}
+              submitLabel="Reservar mi cita"
+              onSubmit={submit}
+            />
+          </>
         )}
       </main>
     </div>
