@@ -8,7 +8,6 @@ import {
   FileSpreadsheet,
   Link2,
   ShieldCheck,
-  Users,
 } from "lucide-react";
 
 const FEATURES = [
@@ -20,7 +19,7 @@ const FEATURES = [
   {
     icon: CalendarCheck,
     title: "Agenda unificada",
-    text: "Google Calendar, promotores por Sheets y link público en una sola agenda, por negocio.",
+    text: "Google Calendar, la hoja de Excel de promotores y link público en una sola agenda, por negocio.",
   },
   {
     icon: Link2,
@@ -29,13 +28,8 @@ const FEATURES = [
   },
   {
     icon: FileSpreadsheet,
-    title: "Promotores por Sheets",
-    text: "El promotor anota en Google Sheets y el webhook valida el horario. Si está ocupado, la hoja lo marca como conflicto.",
-  },
-  {
-    icon: Users,
-    title: "Comisiones solo por cita completada",
-    text: "El panel de Promotores liquida comisiones únicamente sobre citas con check-in (completed).",
+    title: "Hoja de promotores (Excel/Sheets)",
+    text: "Las promotoras anotan en su hoja de Excel y el webhook valida el horario. Si está ocupado, la hoja lo marca como conflicto.",
   },
   {
     icon: AlertTriangle,
@@ -76,9 +70,9 @@ export default function Home() {
             La agenda que no deja empalmar citas
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg text-slate-600">
-            Vincimia Agenda unifica Google Calendar, los promotores
-            de Google Sheets y tu link público de reserva en una sola agenda,
-            con motor anti-empalmes y comisiones por cita completada.
+            Vincimia Agenda unifica Google Calendar, la hoja de Excel de
+            promotores y tu link público de reserva en una sola agenda,
+            con motor anti-empalmes.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link href="/login">

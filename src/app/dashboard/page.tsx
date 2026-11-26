@@ -20,7 +20,6 @@ import {
   proposeTimes,
   resetDemo,
   serviceName,
-  promoterName,
   setStatus,
   type StoreData,
 } from "@/lib/store";
@@ -137,8 +136,9 @@ export default function AgendaPage() {
         <div>
           <h1 className="text-2xl font-bold">Agenda — {data.org.name}</h1>
           <p className="text-sm text-slate-500">
-            Agenda unificada: Google Calendar + promotores (Sheets) + link
-            público. Buffer anti-empalme: {data.org.buffer_minutes} min.
+            Agenda unificada: Google Calendar + hoja de Excel de
+            promotores (Sheets) + link público. Buffer anti-empalme:{" "}
+            {data.org.buffer_minutes} min.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -173,14 +173,12 @@ export default function AgendaPage() {
                   {contactName(data, a.contact_id)} · {fmtTime(a.start_time)}–
                   {fmtTime(a.end_time)}
                 </strong>{" "}
-                ({serviceName(data, a.service_id)}, promotor{" "}
-                {promoterName(data, a.promoter_id)}): {a.notes}
+                ({serviceName(data, a.service_id)}): {a.notes}
               </p>
             ))}
             <p>
               Para probar el motor: crea una cita a las 10:00 o 10:15 y verás
-              el bloqueo. Las citas en conflicto no bloquean horarios ni
-              generan comisión.
+              el bloqueo. Las citas en conflicto no bloquean horarios.
             </p>
           </CardContent>
         </Card>
@@ -259,9 +257,6 @@ export default function AgendaPage() {
                   <p className="text-sm text-slate-600">
                     {serviceName(data, a.service_id)} · {a.duration_minutes}{" "}
                     min · {money(a.price)}
-                    {a.promoter_id && (
-                      <> · Promotor: {promoterName(data, a.promoter_id)}</>
-                    )}
                     {a.doctor_id && (
                       <>
                         {" "}· Doctor:{" "}

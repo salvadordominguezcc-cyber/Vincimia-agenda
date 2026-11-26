@@ -137,11 +137,10 @@ export default function AjustesPage() {
     citas: data.appointments.length,
     clientes: data.contacts.length,
     servicios: data.services.length,
-    promotores: data.promoters.length,
     doctores: (data.doctors ?? []).length,
   };
   const hasDemoData =
-    counts.citas + counts.clientes + counts.servicios + counts.promotores + counts.doctores > 0;
+    counts.citas + counts.clientes + counts.servicios + counts.doctores > 0;
   const localAppts = localOnlyAppointments(data);
   // Servicios y doctores que solo viven en este aparato (sin id de
   // la nube): son los que faltan por subir para que el link los vea.
@@ -342,7 +341,7 @@ export default function AjustesPage() {
     setConfirmClear(false);
 
     // 2) Se borra también en la nube, cuando hay sesión.
-    // Primero las citas y luego clientes, servicios y promotores.
+    // Primero las citas y luego clientes, servicios y doctores.
     if (!supabaseConfigured()) {
       setClearMessage(
         "Ya quedó limpio. Tu agenda está lista para tus datos reales."
@@ -747,8 +746,8 @@ export default function AjustesPage() {
               <p className="text-sm text-slate-600">
                 Ahora mismo tu agenda tiene los datos de ejemplo con los que
                 se probó la app: {counts.citas} citas, {counts.clientes}{" "}
-                clientes, {counts.servicios} servicios, {counts.promotores}{" "}
-                promotores y {counts.doctores} doctores.
+                clientes, {counts.servicios} servicios y {counts.doctores}{" "}
+                doctores.
               </p>
               {!confirmClear ? (
                 <Button
@@ -764,8 +763,8 @@ export default function AjustesPage() {
                     ¿Seguro que quieres borrarlos?
                   </p>
                   <p className="mt-1 text-sm text-red-700">
-                    Esto borra todas las citas, los clientes, los servicios,
-                    los promotores y los doctores de ejemplo. Tu negocio y tu
+                    Esto borra todas las citas, los clientes, los servicios
+                    y los doctores de ejemplo. Tu negocio y tu
                     cuenta no se borran. Esta acción no se puede deshacer.
                   </p>
                   <div className="mt-3 flex gap-2">

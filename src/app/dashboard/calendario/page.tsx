@@ -23,7 +23,6 @@ import {
   fmtTime,
   isFirstVisit,
   loadStore,
-  promoterName,
   proposeTimes,
   serviceName,
   setStatus,
@@ -536,9 +535,6 @@ export default function CalendarioPage() {
                   </>
                 );
               })()}
-              {selected.promoter_id && (
-                <> · <strong>Promotor:</strong> {promoterName(data, selected.promoter_id)}</>
-              )}
             </p>
             <p>
               <strong>Llegó por:</strong>{" "}

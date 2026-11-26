@@ -48,7 +48,6 @@ export default function NuevaCitaPage() {
   const [doctorId, setDoctorId] = useState("");
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState("");
-  const [promoterId, setPromoterId] = useState("");
   const [source, setSource] = useState<SourceType>("vincimia_link");
   const [conflict, setConflict] = useState<Appointment | null>(null);
   const [error, setError] = useState("");
@@ -91,7 +90,6 @@ export default function NuevaCitaPage() {
     setDoctorId("");
     setDate(todayISO());
     setTime("");
-    setPromoterId("");
     setSource("vincimia_link");
     setConflict(null);
     setError("");
@@ -118,7 +116,7 @@ export default function NuevaCitaPage() {
       serviceId,
       date,
       time,
-      promoterId: promoterId || null,
+      promoterId: null,
       source,
       doctorId: doctorId || null,
     });
@@ -156,7 +154,7 @@ export default function NuevaCitaPage() {
         serviceId,
         date,
         time,
-        promoterId: promoterId || null,
+        promoterId: null,
         source,
         doctorId: doctorId || null,
       },
@@ -206,7 +204,7 @@ export default function NuevaCitaPage() {
                 <p className="mt-2">
                   Cambia la hora o guarda el intento como{" "}
                   <strong>conflicto</strong> para dejar registro (no bloquea
-                  horarios ni genera comisión).
+                  horarios).
                 </p>
                 <div className="mt-3 flex gap-2">
                   <Button variant="danger" size="sm" onClick={saveConflict}>
@@ -255,27 +253,6 @@ export default function NuevaCitaPage() {
             onSubmit={submit}
             extraFields={
               <>
-                <div>
-                  <label className="text-sm font-medium">Promotor (opcional)</label>
-                  <select
-                    value={promoterId}
-                    onChange={(e) => setPromoterId(e.target.value)}
-                    className="flex h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
-                  >
-                    <option value="">Sin promotor</option>
-                    {data.promoters
-                      .filter((p) => p.active)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.commission_rate} %)
-                        </option>
-                      ))}
-                  </select>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Solo recepción: el paciente no lo ve. Los promotores se
-                    controlan en su Excel.
-                  </p>
-                </div>
                 <div>
                   <label className="text-sm font-medium">Origen</label>
                   <select

@@ -5,7 +5,7 @@ import PwaRegister from "@/components/PwaRegister";
 export const metadata: Metadata = {
   title: "Vincimia Agenda — Gestión inteligente de citas",
   description:
-    "Vincimia Agenda: agenda unificada multi-negocio con motor anti-empalmes, link público de reserva y promotores por Google Sheets. Sin citas empalmadas.",
+    "Vincimia Agenda: agenda unificada multi-negocio con motor anti-empalmes, link público de reserva y hoja de Excel de promotores por Google Sheets. Sin citas empalmadas.",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/logo.svg", shortcut: "/favicon.svg", apple: "/apple-touch-icon.png" },
 };

@@ -119,8 +119,7 @@ export default function LinkPage() {
           </p>
           <p className="text-slate-600">
             Servicios activos:{" "}
-            {data.services.filter((s) => s.active).length} · Promotores:{" "}
-            {data.promoters.filter((p) => p.active).length}
+            {data.services.filter((s) => s.active).length}
           </p>
         </CardContent>
       </Card>
