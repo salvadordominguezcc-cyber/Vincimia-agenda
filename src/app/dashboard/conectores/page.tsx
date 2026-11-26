@@ -423,16 +423,16 @@ export default function ConectoresPage() {
           <p>{meta?.messenger.message ?? "Cargando el estado de Messenger…"}</p>
           <p>
             Cuando esté conectado, los mensajes de la fanpage llegan a la
-            bandeja y el promotor virtual de ese canal contesta solo, con
-            el mismo cerebro que en WhatsApp. Si quiere agendar, le pasa
-            el link de WhatsApp con su código.
+            bandeja y el bot unificado contesta solo, con el mismo cerebro
+            que en WhatsApp. Si quiere agendar, le pasa el link de
+            WhatsApp del consultorio.
           </p>
           <p>
             Para activarlo falta: el producto Messenger en la app de Meta,
             autorizar la página, verificar el webhook y pegar
             <code className="rounded bg-slate-100 px-1"> META_PAGE_ACCESS_TOKEN</code> y
             <code className="rounded bg-slate-100 px-1"> META_VERIFY_TOKEN</code> en
-            Cloudflare (paso a paso en <code>PROMOTORES_VIRTUALES.md</code>).
+            Cloudflare (paso a paso en <code>FASE2_SETUP.md</code>).
           </p>
           <p className="text-xs text-slate-500">
             Webhook para pegar en Meta:{" "}
@@ -459,10 +459,10 @@ export default function ConectoresPage() {
           <p>{meta?.instagram.message ?? "Cargando el estado de Instagram…"}</p>
           <p>
             Cuando esté conectado, los mensajes directos de la cuenta
-            profesional de Instagram llegan a la bandeja y el promotor
-            virtual de ese canal contesta solo, con el mismo cerebro que
-            en WhatsApp. Si quiere agendar, le pasa el link de WhatsApp
-            con su código.
+            profesional de Instagram llegan a la bandeja y el bot
+            unificado contesta solo, con el mismo cerebro que en
+            WhatsApp. Si quiere agendar, le pasa el link de WhatsApp
+            del consultorio.
           </p>
           <p>
             Para activarlo falta: el producto Instagram en la app de Meta,
@@ -470,7 +470,7 @@ export default function ConectoresPage() {
             verificar el webhook y pegar
             <code className="rounded bg-slate-100 px-1"> META_INSTAGRAM_TOKEN</code> y
             <code className="rounded bg-slate-100 px-1"> META_VERIFY_TOKEN</code> en
-            Cloudflare (paso a paso en <code>PROMOTORES_VIRTUALES.md</code>).
+            Cloudflare (paso a paso en <code>FASE2_SETUP.md</code>).
           </p>
           <p className="text-xs text-slate-500">
             Webhook para pegar en Meta:{" "}

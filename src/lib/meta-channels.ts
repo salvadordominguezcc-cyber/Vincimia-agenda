@@ -13,28 +13,27 @@
 // Sin token, nada se envía: las rutas responden 503/200 explicando
 // qué falta, y Conectores dice Pendiente y por qué. Los tokens NUNCA
 // se guardan en la base de datos: viven en Cloudflare como variables
-// de entorno (ver .env.example y PROMOTORES_VIRTUALES.md).
+// de entorno (ver .env.example y FASE2_SETUP.md).
 //
 // Valor del canal en el código y en la base de datos:
-// "facebook" = Messenger de la fanpage (mismo valor que
-// VirtualPromoterChannel e InboxChannel, migraciones 006 y 008);
-// "instagram" = Instagram. No se inventa un valor "messenger" nuevo
-// para no romper los datos y las reglas CHECK que ya existen.
+// "facebook" = Messenger de la fanpage; "instagram" = Instagram.
+// No se inventa un valor "messenger" nuevo para no romper los datos
+// y las reglas CHECK que ya existen.
 //
-// El bot que contesta es el mismo cerebro de los promotores virtuales
-// (Gemini primero, luego Groq, con respaldo demo marcado "sin
-// conexión a la IA" — src/lib/virtual-promoters-server.ts). El pase a
-// WhatsApp único (+52 686 338 6047) no cambia: cuando el paciente
-// quiere agendar, el bot le pasa el link wa.me con su código.
+// El bot que contesta es el bot UNIFICADO (decisión 2026-11-26: un
+// solo bot, sin promotores virtuales; solo importa el canal). Su
+// cerebro es src/lib/unified-bot.ts (Gemini primero, luego Groq, con
+// respaldo demo marcado "sin conexión a la IA"). El pase a WhatsApp
+// único (+52 663 328 0701) no cambia: cuando el paciente quiere
+// agendar, el bot le pasa el link wa.me.
 
 import { supabaseServer } from "./supabase";
-import type { Promoter } from "./types";
 import {
   buildHandoff,
   demoReply,
   detectaIntencionCita,
-} from "./virtual-promoters";
-import { replyWithAI } from "./virtual-promoters-server";
+  replyWithAI,
+} from "./unified-bot";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
@@ -68,7 +67,7 @@ export function metaPendingReason(channel: MetaChannel): string {
     channel === "facebook" ? "META_PAGE_ACCESS_TOKEN" : "META_INSTAGRAM_TOKEN";
   return (
     `${META_CHANNEL_LABEL[channel]} no configurado: falta ${tokenName} ` +
-    `y META_VERIFY_TOKEN en Cloudflare (ver PROMOTORES_VIRTUALES.md).`
+    `y META_VERIFY_TOKEN en Cloudflare (ver FASE2_SETUP.md).`
   );
 }
 
@@ -196,7 +195,7 @@ async function graphSend(
 }
 
 // ---------------------------------------------------------------------------
-// Respuesta automática con el promotor virtual del canal
+// Respuesta automática con el bot unificado del canal
 // ---------------------------------------------------------------------------
 
 interface OrgMetaRow {
@@ -238,32 +237,6 @@ async function findOrgByMetaId(
       .maybeSingle();
     if (error || !data) return null;
     return data as OrgMetaRow;
-  } catch {
-    return null;
-  }
-}
-
-/** Promotor virtual activo del negocio para ese canal (el primero).
- *  Sin la migración 008 las columnas no existen: se devuelve null. */
-async function findVirtualPromoter(
-  organizationId: string,
-  channel: MetaChannel
-): Promise<Promoter | null> {
-  const supabase = supabaseServer();
-  if (!supabase) return null;
-  try {
-    const { data, error } = await supabase
-      .from("promoters")
-      .select("*")
-      .eq("organization_id", organizationId)
-      .eq("is_virtual", true)
-      .eq("channel", channel)
-      .eq("active", true)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (error || !data) return null;
-    return data as Promoter;
   } catch {
     return null;
   }
@@ -329,60 +302,16 @@ async function recordInboxMessage(
   }
 }
 
-/** Registra la charla en el embudo del promotor virtual (tabla de la
- *  migración 008). Si la tabla no existe, no pasa nada. */
-async function recordPromoterConversation(
-  orgId: string,
-  promoter: Promoter,
-  channel: MetaChannel,
-  senderId: string,
-  treatment: string | null,
-  wantsBooking: boolean
-): Promise<void> {
-  const supabase = supabaseServer();
-  if (!supabase) return;
-  try {
-    const { data: existing } = await supabase
-      .from("promoter_conversations")
-      .select("id")
-      .eq("promoter_id", promoter.id)
-      .eq("meta_sender_id", senderId)
-      .limit(1)
-      .maybeSingle();
-    const row = {
-      organization_id: orgId,
-      promoter_id: promoter.id,
-      channel,
-      patient_phone: null,
-      treatment,
-      status: wantsBooking ? "en_whatsapp" : "conversando",
-      meta_sender_id: senderId,
-      updated_at: new Date().toISOString(),
-    };
-    if ((existing as { id?: string } | null)?.id) {
-      await supabase
-        .from("promoter_conversations")
-        .update(row)
-        .eq("id", (existing as { id: string }).id);
-    } else {
-      await supabase.from("promoter_conversations").insert(row);
-    }
-  } catch {
-    // Sin la migración 008/009, la charla no se registra: no se rompe nada.
-  }
-}
-
 /**
  * Atiende un mensaje que llegó por Messenger o Instagram.
  * 1. Resuelve el negocio por el id de la página/cuenta (migración 009).
  * 2. Guarda el mensaje en la bandeja (migración 006), si las tablas existen.
- * 3. Si el bot del canal está activado para ese negocio y tiene un
- *    promotor virtual en ese canal, contesta con el mismo cerebro de
- *    /api/promotores/chat (Gemini, luego Groq, luego demo marcada).
- *    Cuando el paciente quiere agendar, la respuesta lleva el link de
- *    WhatsApp con su código de promotor.
- * Sin token, sin negocio, sin bot activado o sin promotor, no se
- * contesta nada: se responde 200 para que Meta no reintente en bucle.
+ * 3. Si el bot unificado del canal está activado para ese negocio,
+ *    contesta con el cerebro unificado (Gemini, luego Groq, luego
+ *    demo marcada). Cuando el paciente quiere agendar, la respuesta
+ *    lleva el link del WhatsApp único del consultorio.
+ * Sin token, sin negocio o sin bot activado, no se contesta nada:
+ * se responde 200 para que Meta no reintente en bucle.
  */
 export async function handleMetaIncoming(
   channel: MetaChannel,
@@ -427,17 +356,8 @@ export async function handleMetaIncoming(
       reason: `El bot de ${META_CHANNEL_LABEL[channel]} está apagado para este negocio. El mensaje quedó en la bandeja.`,
     };
   }
-  const promoter = await findVirtualPromoter(org.id, channel);
-  if (!promoter) {
-    return {
-      ok: true,
-      recorded,
-      replied: false,
-      reason: `Este negocio no tiene un promotor virtual activo en ${META_CHANNEL_LABEL[channel]}. El mensaje quedó en la bandeja.`,
-    };
-  }
-  const ai = await replyWithAI(promoter, org.name, event.text);
-  const demo = demoReply(promoter, event.text, org.name);
+  const ai = await replyWithAI(org.name, event.text);
+  const demo = demoReply(event.text, org.name);
   const reply = ai?.reply ?? demo.reply;
   const modo = ai?.modo ?? "demo";
   const wantsBooking =
@@ -452,10 +372,10 @@ export async function handleMetaIncoming(
           : /endodoncia/i.test(event.text)
             ? "Endodoncia"
             : null;
-  // Cuando quiere agendar, la respuesta lleva el pase a WhatsApp con
-  // su código (mismo pase que /api/promotores/chat).
+  // Cuando quiere agendar, la respuesta lleva el pase al WhatsApp
+  // único del consultorio (sin código de promotor).
   const textToSend = wantsBooking
-    ? `${reply}\n\nPara agendar, escríbenos por WhatsApp: ${buildHandoff(promoter, { treatment }).url}`
+    ? `${reply}\n\nPara agendar, escríbenos por WhatsApp: ${buildHandoff(META_CHANNEL_LABEL[channel], { treatment }).url}`
     : reply;
   try {
     await graphSend(channel, event.senderId, textToSend);
@@ -467,22 +387,11 @@ export async function handleMetaIncoming(
       reason: `${META_CHANNEL_LABEL[channel]} no pudo enviar el mensaje: ${String(e)}`,
     };
   }
-  // La plantilla de información para la cita se manda por WhatsApp
-  // cuando el paciente llega ahí (buildInfoCita en
-  // src/lib/virtual-promoters.ts); aquí solo se guarda el embudo.
-  await recordPromoterConversation(
-    org.id,
-    promoter,
-    channel,
-    event.senderId,
-    treatment,
-    wantsBooking
-  );
   return {
     ok: true,
     recorded,
     replied: true,
     modo,
-    reason: `Contestado por ${promoter.name} (${modo}).`,
+    reason: `Contestado por el bot unificado (${modo}).`,
   };
 }

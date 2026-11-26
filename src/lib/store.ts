@@ -42,9 +42,9 @@ export interface StoreData {
   feedback: FeedbackItem[];
   /** Solicitudes de reseña encoladas/enviadas al completar citas. */
   reviewRequests: ReviewRequest[];
-  /** Conversaciones de los promotores virtuales (migración 008):
-   *  una fila por paciente y promotor. Vacías al inicio: no se
-   *  inventan pacientes. */
+  /** Conversaciones viejas con el bot (antes embudo de promotores
+   *  virtuales, eliminado 2026-11-26). Se conserva el campo para no
+   *  romper almacenes viejos; ya no se crean filas nuevas. */
   conversations: PromoterConversation[];
   seededFor: string;
   /**
@@ -102,20 +102,8 @@ export function loadStore(): StoreData {
     // tenían feedback ni solicitudes; arrancan vacíos, sin inventar nada.
     if (!parsed.feedback) parsed.feedback = [];
     if (!parsed.reviewRequests) parsed.reviewRequests = [];
-    // Migración suave de Promotores virtuales (008): los almacenes
-    // viejos no tenían conversaciones; arrancan vacías. Y si no hay
-    // ningún promotor virtual, se agregan los 3 por defecto (sin
-    // tocar los promotores humanos que ya tenga el usuario).
+    // Los almacenes viejos no tenían conversaciones; arrancan vacías.
     if (!parsed.conversations) parsed.conversations = [];
-    if (!parsed.promoters.some((p) => p.is_virtual)) {
-      parsed.promoters = [
-        ...parsed.promoters,
-        ...DEMO_PROMOTERS.filter((p) => p.is_virtual).map((p) => ({
-          ...p,
-          organization_id: parsed.org.id,
-        })),
-      ];
-    }
     // Cada día se regeneran las citas de ejemplo para que la Agenda
     // de hoy siempre tenga datos con los que probar el anti-empalme.
     // Salvo que el usuario ya haya borrado los datos de ejemplo en

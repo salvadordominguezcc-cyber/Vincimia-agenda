@@ -38,14 +38,13 @@ USD/mes) ni Chatwoot en servidor aparte.
 - `src/lib/messenger.ts` y `src/lib/instagram.ts` — envío por
   Messenger e Instagram (espejo de `src/lib/whatsapp.ts`).
 - `src/lib/meta-channels.ts` — verificación de webhooks, lectura de
-  eventos de Meta, envío por Graph API y respuesta con el promotor
-  virtual del canal.
+  eventos de Meta, envío por Graph API y respuesta con el bot
+  unificado del canal (cerebro en `src/lib/unified-bot.ts`).
 - `src/app/api/webhook/messenger/route.ts` y
   `src/app/api/webhook/instagram/route.ts` — webhooks de Meta: guardan
-  el mensaje en la bandeja y contestan con el promotor virtual del
-  canal (mismo cerebro que `/api/promotores/chat`). Sin token o sin
-  negocio registrado por `meta_page_id` / `meta_instagram_id`, no
-  contestan nada.
+  el mensaje en la bandeja y contestan con el bot unificado del
+  canal. Sin token o sin negocio registrado por `meta_page_id` /
+  `meta_instagram_id`, no contestan nada.
 - `src/app/api/meta/status/route.ts` — estado real de Messenger e
   Instagram, sin exponer tokens.
 - `src/app/api/inbox/send/route.ts` — envío de la bandeja por

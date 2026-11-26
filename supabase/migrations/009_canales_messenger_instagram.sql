@@ -17,9 +17,6 @@
 --    escribe (PSID en Messenger, IGSID en Instagram) y el id de la
 --    página/cuenta, para que la bandeja sepa a quién responder por
 --    cada canal. El teléfono puede ser null en estos canales.
--- 3. En `promoter_conversations` (migración 008): el id de Meta del
---    paciente, para registrar el embudo del promotor virtual aunque
---    el paciente no haya dado su teléfono todavía.
 -- ============================================================================
 
 -- 1. Negocio: ids de Meta + interruptores del bot por canal.
@@ -39,10 +36,9 @@ ALTER TABLE public.conversations
 CREATE INDEX IF NOT EXISTS idx_conversations_meta_sender
   ON public.conversations (organization_id, channel, meta_sender_id);
 
--- 3. Embudo del promotor virtual: id de Meta del paciente.
-ALTER TABLE public.promoter_conversations
-  ADD COLUMN IF NOT EXISTS meta_sender_id TEXT;
-
--- 4. Sin datos de ejemplo: los ids de Meta los pone el dueño en la
+-- 3. Sin datos de ejemplo: los ids de Meta los pone el dueño en la
 -- base de datos (o desde el panel, cuando se agregue el campo) al
 -- activar cada canal. Nada se siembra aquí.
+-- Nota: la sección 3 original (embudo de promotores virtuales,
+-- tabla promoter_conversations de la migración 008) se eliminó el
+-- 2026-11-26 junto con los promotores virtuales.
