@@ -114,6 +114,39 @@ export async function sendWhatsAppConfirmation(
   return { messageId: id, via: "text" };
 }
 
+/** Nombre de la plantilla del link de reserva con botón
+ *  "Agendar cita" (categoría Utilidad, idioma es_MX, 1 hueco: nombre
+ *  del paciente). El botón de URL se configura en Meta al crear la
+ *  plantilla (URL fija del link de reserva); la llamada es la misma
+ *  que cualquier plantilla, no hace falta ningún componente de botón. */
+export function linkReservaTemplateName(): string {
+  return process.env.WHATSAPP_LINK_TEMPLATE_NAME?.trim() || "link_reserva";
+}
+
+/** Manda el link de reserva como botón dentro de la plantilla
+ *  link_reserva. Llega siempre, también fuera de la ventana de
+ *  24 horas. Si la plantilla todavía no existe o no está aprobada
+ *  en Meta, manda el texto libre con el link (fallback) para que el
+ *  paciente igual reciba cómo agendar. Devuelve el id del mensaje
+ *  de Meta y por qué vía llegó. */
+export async function sendBookingLink(
+  to: string,
+  opts: { firstName?: string | null; fallbackText: string }
+): Promise<{ messageId: string; via: "template" | "text" }> {
+  const firstName = opts.firstName?.trim() || "amigo";
+  try {
+    const id = await sendWhatsAppTemplate(
+      to,
+      linkReservaTemplateName(),
+      [firstName]
+    );
+    return { messageId: id, via: "template" };
+  } catch {
+    const id = await sendWhatsAppText(to, opts.fallbackText);
+    return { messageId: id, via: "text" };
+  }
+}
+
 /** Envía la solicitud de reseña al completar una cita.
  *  Plantilla opcional WHATSAPP_REVIEW_TEMPLATE_NAME (categoría Utility,
  *  idioma es_MX, 3 huecos en orden: nombre del paciente, nombre del

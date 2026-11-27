@@ -22,6 +22,7 @@
 //   registrarse (como Particular o con otra póliza).
 
 import type { Organization } from "./types";
+import { sendBookingLink } from "./whatsapp";
 
 /** WhatsApp único del consultorio: ahí caen los 3 canales.
  *  wa.me usa el número sin "+" ni espacios. */
@@ -85,7 +86,9 @@ export function buildHandoff(
 /**
  * Plantilla de información para la cita: lo que se le manda al
  * paciente por WhatsApp al confirmar. No inventa precios ni horarios:
- * los horarios se confirman al reservar en el link.
+ * los horarios se confirman al reservar en el link. También es el
+ * texto de respaldo de sendBookingLinkToPatient cuando la plantilla
+ * link_reserva todavía no está aprobada en Meta.
  */
 export function buildInfoCita(
   org: Organization,
@@ -100,6 +103,29 @@ export function buildInfoCita(
     `• Póliza particular: sin costo de activación. La valoración sin costo se activa al asistir y registrarte.\n` +
     `• Si el doctor pide anticipo, tu cita queda en pausa hasta confirmar los horarios; todavía no hay cobro en línea.`
   );
+}
+
+/**
+ * Manda el link de reserva al paciente por WhatsApp: primero como
+ * botón "Agendar cita" dentro de la plantilla link_reserva (llega
+ * siempre, también fuera de la ventana de 24 horas); si la plantilla
+ * todavía no existe o no está aprobada en Meta, manda el texto con
+ * el link (buildInfoCita) para que igual reciba cómo agendar.
+ * Es la ruta de envío del link del bot unificado: la usa el cableado
+ * del webhook de WhatsApp cuando el bot conteste ahí (pendiente: hoy
+ * el webhook de WhatsApp no usa el cerebro unificado, solo confirma
+ * y cancela citas existentes).
+ */
+export async function sendBookingLinkToPatient(
+  to: string,
+  org: Organization,
+  opts?: { patientName?: string | null; siteUrl?: string }
+): Promise<{ messageId: string; via: "template" | "text" }> {
+  const firstName = opts?.patientName?.trim().split(/\s+/)[0] ?? null;
+  return sendBookingLink(to, {
+    firstName,
+    fallbackText: buildInfoCita(org, opts),
+  });
 }
 
 // ---------------------------------------------------------------------------
