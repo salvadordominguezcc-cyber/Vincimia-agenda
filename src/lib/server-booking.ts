@@ -13,6 +13,7 @@ export const DEFAULT_POLICY = "PARTICULAR /SALVADOR";
 export const DEFAULT_PROMOTION = "VALORACIÓN";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { startAfterLastAllowed } from "./anti-overlap";
 import { attachClinicOffset, clinicWallISO } from "./clinic-time";
 import {
   detectPhoneCountry,
@@ -193,15 +194,17 @@ function overlaps(
   return aStart < bEndBuf && bStart < aEndBuf;
 }
 
-/** ¿Ese horario choca con una cita que bloquea, o cae en el descanso?
- *  Las horas llegan en hora local de la clínica ("2026-11-27T11:30:00"). */
+/** ¿Ese horario choca con una cita que bloquea, cae en el descanso,
+ *  o empieza después de la última cita del día (12:00 en la mañana,
+ *  17:00 en la tarde)? Las horas llegan en hora local de la clínica
+ *  ("2026-11-27T11:30:00"). */
 export async function checkCloudOverlap(
   supabase: SupabaseClient,
   org: CloudOrg,
   startISO: string,
   durationMinutes: number,
   doctorId: string | null
-): Promise<{ clash: boolean; inBreak: boolean }> {
+): Promise<{ clash: boolean; inBreak: boolean; pastLastStart: boolean }> {
   // Las horas llegan en hora local de la clínica ("2026-11-27T11:30:00",
   // sin desfase) y las de Supabase en UTC. Para compararlas, las dos se
   // pasan a "hora de pared": la de la nube se convierte a hora de
@@ -235,7 +238,14 @@ export async function checkCloudOverlap(
     !!org.break_end &&
     reqStartMin < toMin(org.break_end) &&
     toMin(org.break_start) < reqStartMin + durationMinutes;
-  return { clash, inBreak };
+  // Última cita del día: la mañana no empieza después de las 12:00
+  // y la tarde no después de las 17:00, para alcanzar a cerrar.
+  const pastLastStart = startAfterLastAllowed(
+    startISO.slice(11, 16),
+    org.break_start,
+    org.break_end
+  );
+  return { clash, inBreak, pastLastStart };
 }
 
 /** Inserta la cita en la nube. startISO en hora local de la clínica;

@@ -5,7 +5,7 @@
 // la etiqueta "Modo demo" está visible en todo el panel.
 "use client";
 
-import { findConflict, overlapsBreak } from "./anti-overlap";
+import { findConflict, overlapsBreak, startAfterLastAllowed } from "./anti-overlap";
 import {
   DEMO_APPOINTMENTS,
   DEMO_CONTACTS,
@@ -276,6 +276,17 @@ export function createAppointment(
     return {
       ok: false,
       error: `Ese horario choca con el tiempo de descanso de la clínica (${data.org.break_start}–${data.org.break_end}). Elige otro horario.`,
+    };
+  }
+  // Última cita del día: la mañana no empieza después de las 12:00
+  // y la tarde no después de las 17:00, para alcanzar a cerrar.
+  if (
+    startAfterLastAllowed(input.time, data.org.break_start, data.org.break_end)
+  ) {
+    return {
+      ok: false,
+      error:
+        "La última cita de la mañana empieza a las 12:00 y la de la tarde a las 17:00. Elige otro horario.",
     };
   }
   const startISO = `${input.date}T${input.time}:00`;

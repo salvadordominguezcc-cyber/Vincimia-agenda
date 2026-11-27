@@ -82,6 +82,36 @@ export function overlapsBreak(
   return start < toMin(breakEnd) && toMin(breakStart) < end;
 }
 
+/** Última hora de INICIO de cita en la mañana (12:00) y en la tarde
+ *  (17:00): para alcanzar a terminar y cerrar a tiempo. Una cita de
+ *  30 min que empieza a las 12:00 termina 12:30 (antes de la comida
+ *  de las 13:00) y una que empieza a las 17:00 termina 17:30 (antes
+ *  del cierre de las 18:00). Mismo tope que la hoja de promotores,
+ *  que no tiene huecos después de las 12:00 ni de las 17:00.
+ *  El tope es sobre la hora de inicio: una cita larga que empieza
+ *  a las 12:00 y se metería en la comida sigue bloqueada por el
+ *  chequeo de descanso (overlapsBreak), no por este tope. */
+export const LAST_START_MORNING = "12:00";
+export const LAST_START_AFTERNOON = "17:00";
+
+/** ¿Esa hora de inicio (HH:MM) pasa la última cita del día? La
+ *  mañana es antes del descanso y la tarde después; sin descanso
+ *  configurado se usa 13:00–14:00. Un inicio dentro del descanso
+ *  devuelve false aquí: lo bloquea el chequeo de descanso. */
+export function startAfterLastAllowed(
+  hhmm: string,
+  breakStart: string | null,
+  breakEnd: string | null
+): boolean {
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const start = toMin(hhmm);
+  const bs = breakStart ? toMin(breakStart) : 13 * 60;
+  const be = breakEnd ? toMin(breakEnd) : 14 * 60;
+  if (start < bs) return start > toMin(LAST_START_MORNING);
+  if (start >= be) return start > toMin(LAST_START_AFTERNOON);
+  return false;
+}
+
 /** Horas de inicio libres para un día, cada 30 min entre 09:00 y 14:00.
  *  Si se pasa un horario de doctor, solo se ofrecen horas dentro de su
  *  horario de ese día (y hasta las 20:00 como máximo). En ningún caso se
@@ -102,6 +132,10 @@ export function freeSlots(
   const blockedByBreak = (hhmm: string) =>
     !!breakWindow &&
     overlapsBreak(`${dateISO}T${hhmm}:00`, durationMinutes, breakWindow.start, breakWindow.end);
+  // Última cita del día: en la mañana no se ofrece nada que empiece
+  // después de las 12:00, en la tarde nada después de las 17:00.
+  const pastLastStart = (hhmm: string) =>
+    startAfterLastAllowed(hhmm, breakWindow?.start ?? null, breakWindow?.end ?? null);
   if (doctorSchedule) {
     const day = doctorSchedule.find((d) => d.weekday === weekday && d.active);
     if (!day) return [];
@@ -120,6 +154,7 @@ export function freeSlots(
         const hh = String(h).padStart(2, "0");
         const mm = String(m).padStart(2, "0");
         const startISO = `${dateISO}T${hh}:${mm}:00`;
+        if (pastLastStart(`${hh}:${mm}`)) continue;
         if (blockedByBreak(`${hh}:${mm}`)) continue;
         if (
           !findConflict(startISO, durationMinutes, existing, bufferMinutes, undefined, doctorId)
@@ -136,6 +171,7 @@ export function freeSlots(
       const hh = String(h).padStart(2, "0");
       const mm = String(m).padStart(2, "0");
       const startISO = `${dateISO}T${hh}:${mm}:00`;
+      if (pastLastStart(`${hh}:${mm}`)) continue;
       if (blockedByBreak(`${hh}:${mm}`)) continue;
       if (
         !findConflict(startISO, durationMinutes, existing, bufferMinutes, undefined, doctorId)

@@ -113,21 +113,23 @@ export async function POST(req: Request) {
   const service = await resolveService(supabase, org.id, serviceName, durationMinutes);
   const doctor = await resolveDoctor(supabase, org.id, doctorId, doctorName);
   const startISO = `${date}T${time}:00`;
-  const { clash, inBreak } = await checkCloudOverlap(
+  const { clash, inBreak, pastLastStart } = await checkCloudOverlap(
     supabase,
     org,
     startISO,
     service.duration_minutes,
     doctor?.id ?? null
   );
-  if (clash || inBreak) {
+  if (clash || inBreak || pastLastStart) {
     return Response.json(
       {
         ok: false,
         conflict: true,
         message: inBreak
           ? `Ese horario cae en el tiempo de descanso (${org.break_start}–${org.break_end}). Elige otro horario.`
-          : "Ese horario se acaba de ocupar. Elige otro horario libre de la lista.",
+          : pastLastStart
+            ? "La última cita de la mañana empieza a las 12:00 y la de la tarde a las 17:00. Elige otro horario."
+            : "Ese horario se acaba de ocupar. Elige otro horario libre de la lista.",
       },
       { status: 409 }
     );
