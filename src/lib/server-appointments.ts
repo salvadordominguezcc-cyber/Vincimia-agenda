@@ -40,7 +40,9 @@ export interface OrgRow {
    *  undefined = columna aún no aplicada en Supabase → se trata
    *  como TRUE (comportamiento actual, sin cambios). */
   vincimia_confirmations_enabled?: boolean | null;
-  google_review_url: string | null;
+  /** Link de Google para reseñas (migración 007).
+   *  undefined = columna aún no aplicada en Supabase. */
+  google_review_url?: string | null;
 }
 
 export interface ApptFull {
@@ -73,29 +75,38 @@ export interface ApptFull {
   promoterName: string | null;
 }
 
+/** Columnas que existen en el esquema base de organizations.
+ *  Las opcionales (migración 007 google_review_url, migración 010
+ *  vincimia_confirmations_enabled) se piden aparte: si alguna aún no
+ *  existe en Supabase, el select fallaría y la organización parecería
+ *  no existir — eso fue lo que rompió Confirmar en vivo el 2026-11-26
+ *  (404 "Organización no encontrada", sin Google ni WhatsApp). */
+const ORG_BASE_COLUMNS =
+  "id, name, slug, buffer_minutes, break_start, break_end, google_calendar_sync, connected_google_email, google_calendar_id, google_refresh_token, whatsapp_bot_enabled";
+const ORG_FULL_COLUMNS = `${ORG_BASE_COLUMNS}, vincimia_confirmations_enabled, google_review_url`;
+
 export async function loadOrg(
   supabase: SupabaseClient,
   organizationId: string
 ): Promise<OrgRow | null> {
-  const columns =
-    "id, name, slug, buffer_minutes, break_start, break_end, google_calendar_sync, connected_google_email, google_calendar_id, google_refresh_token, whatsapp_bot_enabled, vincimia_confirmations_enabled, google_review_url";
-  const { data, error } = await supabase
+  const first = await supabase
     .from("organizations")
-    .select(columns)
+    .select(ORG_FULL_COLUMNS)
     .eq("id", organizationId)
     .single();
-  if (!error) return (data as OrgRow | null) ?? null;
-  // La columna del interruptor aún no existe (migración 010 sin
-  // aplicar): se reintenta sin ella y el interruptor se trata como
-  // TRUE en vincimiaConfirmationsEnabled(). Sin este reintento, el
-  // select fallaría y la organización parecería no existir.
+  if (!first.error) return (first.data as OrgRow | null) ?? null;
+  // Una columna opcional aún no existe (migración 007 o 010 sin
+  // aplicar): reintentar solo con las columnas base. Las opcionales
+  // quedan undefined y sus llamadas las tratan con sus valores por
+  // defecto (confirmaciones prendidas; sin link de reseñas). Sin
+  // este reintento, el select fallaría y la organización parecería
+  // no existir, aunque la cita sí esté en la nube.
   const fallback = await supabase
     .from("organizations")
-    .select(
-      "id, name, slug, buffer_minutes, break_start, break_end, google_calendar_sync, connected_google_email, google_calendar_id, google_refresh_token, whatsapp_bot_enabled, google_review_url"
-    )
+    .select(ORG_BASE_COLUMNS)
     .eq("id", organizationId)
     .single();
+  if (fallback.error) return null;
   return (fallback.data as OrgRow | null) ?? null;
 }
 

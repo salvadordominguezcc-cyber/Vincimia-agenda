@@ -313,6 +313,8 @@ export async function updateOrgSettings(
     "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled, address, hours_text";
   const legacySelect =
     "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled";
+  const baseSelect =
+    "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled";
   const { data, error } = await supabase
     .from("organizations")
     .update(patch)
@@ -325,41 +327,92 @@ export async function updateOrgSettings(
   if ((error as { code?: string }).code === "23505") {
     return { ok: false, error: "slug-taken" };
   }
-  // Columna de la migración 011 aún no aplicada: reintentar sin
-  // address/hours_text para no perder el resto del guardado.
+  // Columna opcional aún no aplicada en la nube (migración 010 o
+  // 011): reintentar sin address/hours_text y, si hace falta, sin
+  // el interruptor, para no perder el resto del guardado. El
+  // interruptor queda como TRUE por defecto (ver
+  // vincimiaConfirmationsEnabled en server-appointments.ts).
   const missingColumn =
     (error as { code?: string }).code === "42703" ||
-    /address|hours_text/.test(String((error as { message?: string }).message ?? ""));
-  if (missingColumn && ("address" in patch || "hours_text" in patch)) {
-    const { address: _a, hours_text: _h, ...legacyPatch } = patch;
-    if (Object.keys(legacyPatch).length === 0) {
-      return { ok: false, error: "pending-migration-011" };
-    }
-    const retry = await supabase
-      .from("organizations")
-      .update(legacyPatch)
-      .eq("id", organizationId)
-      .select(legacySelect)
-      .single();
-    if (retry.error) {
-      if ((retry.error as { code?: string }).code === "23505") {
-        return { ok: false, error: "slug-taken" };
-      }
-      return { ok: false, error: retry.error.message };
-    }
+    /address|hours_text|vincimia_confirmations_enabled/.test(
+      String((error as { message?: string }).message ?? "")
+    );
+  if (!missingColumn) {
+    return { ok: false, error: error.message };
+  }
+  const { address: _a, hours_text: _h, ...legacyPatch } = patch;
+  // Si lo que falta es solo el interruptor (010), el parche completo
+  // sí se puede guardar: reintentar con el select base. Si faltan
+  // address/hours_text (011), quitarlos del parche y reintentar.
+  const errorMentions010 = /vincimia_confirmations_enabled/.test(
+    String((error as { message?: string }).message ?? "")
+  );
+  const retryPatch = errorMentions010 ? patch : legacyPatch;
+  const retrySelect = errorMentions010 ? baseSelect : legacySelect;
+  if (Object.keys(retryPatch).length === 0) {
+    // Solo se quería guardar dirección/horario y la migración 011
+    // no está aplicada: no hay nada más que guardar.
+    return { ok: false, error: "pending-migration-011" };
+  }
+  const retry = await supabase
+    .from("organizations")
+    .update(retryPatch)
+    .eq("id", organizationId)
+    .select(retrySelect)
+    .single();
+  if (!retry.error) {
     return {
       ok: true,
-      row: retry.data as Record<string, unknown>,
-      pending_columns: ["address", "hours_text"],
+      row: retry.data as unknown as Record<string, unknown>,
+      ...(!errorMentions010 &&
+        ("address" in patch || "hours_text" in patch) && {
+          pending_columns: ["address", "hours_text"],
+        }),
     };
   }
-  return { ok: false, error: error.message };
+  if ((retry.error as { code?: string }).code === "23505") {
+    return { ok: false, error: "slug-taken" };
+  }
+  const retryMissingColumn =
+    (retry.error as { code?: string }).code === "42703" ||
+    /address|hours_text|vincimia_confirmations_enabled/.test(
+      String((retry.error as { message?: string }).message ?? "")
+    );
+  if (!retryMissingColumn) {
+    return { ok: false, error: retry.error.message };
+  }
+  // Faltan las dos migraciones (010 y 011): guardar solo con las
+  // columnas base, sin dirección, horario ni interruptor.
+  const basePatch: Record<string, unknown> = { ...legacyPatch };
+  if (Object.keys(basePatch).length === 0) {
+    return { ok: false, error: "pending-migration-011" };
+  }
+  const base = await supabase
+    .from("organizations")
+    .update(basePatch)
+    .eq("id", organizationId)
+    .select(baseSelect)
+    .single();
+  if (base.error) {
+    if ((base.error as { code?: string }).code === "23505") {
+      return { ok: false, error: "slug-taken" };
+    }
+    return { ok: false, error: base.error.message };
+  }
+  return {
+    ok: true,
+    row: base.data as Record<string, unknown>,
+    ...(("address" in patch || "hours_text" in patch) && {
+      pending_columns: ["address", "hours_text"],
+    }),
+  };
 }
 
 /** Lee la fila del negocio para el catálogo (panel o link). Prueba
- *  con las columnas de la migración 011 y, si aún no existen en la
- *  nube, reintenta con la lista anterior: la sincronización del
- *  catálogo nunca debe romperse por una columna nueva. */
+ *  con las columnas de las migraciones 010 y 011 y, si aún no
+ *  existen en la nube, reintenta sin ellas: la sincronización del
+ *  catálogo nunca debe romperse por una columna nueva, ni hacer
+ *  que el negocio parezca no existir. */
 export async function fetchOrgForCatalog(
   supabase: SupabaseClient,
   field: "id" | "slug",
@@ -369,6 +422,8 @@ export async function fetchOrgForCatalog(
     "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled, address, hours_text";
   const legacySelect =
     "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled, vincimia_confirmations_enabled";
+  const baseSelect =
+    "id, name, slug, buffer_minutes, break_start, break_end, connected_google_email, google_calendar_sync, whatsapp_bot_enabled";
   const first = await supabase
     .from("organizations")
     .select(fullSelect)
@@ -378,12 +433,27 @@ export async function fetchOrgForCatalog(
   if (!first.error) return null;
   const missingColumn =
     (first.error as { code?: string }).code === "42703" ||
-    /address|hours_text/.test(String((first.error as { message?: string }).message ?? ""));
+    /address|hours_text|vincimia_confirmations_enabled/.test(
+      String((first.error as { message?: string }).message ?? "")
+    );
   if (!missingColumn) return null;
   const retry = await supabase
     .from("organizations")
     .select(legacySelect)
     .eq(field, value)
     .single();
-  return (retry.data as Record<string, unknown> | null) ?? null;
+  if (retry.data) return retry.data as Record<string, unknown>;
+  if (!retry.error) return null;
+  const retryMissingColumn =
+    (retry.error as { code?: string }).code === "42703" ||
+    /vincimia_confirmations_enabled/.test(
+      String((retry.error as { message?: string }).message ?? "")
+    );
+  if (!retryMissingColumn) return null;
+  const base = await supabase
+    .from("organizations")
+    .select(baseSelect)
+    .eq(field, value)
+    .single();
+  return (base.data as Record<string, unknown> | null) ?? null;
 }

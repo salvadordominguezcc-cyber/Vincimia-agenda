@@ -74,12 +74,24 @@ export default function ResenasPage() {
     const loadCloud = async () => {
       const client = supabaseBrowser();
       if (!client) return;
-      const { data: orgRows } = await client
+      const { data: orgRows, error: orgError } = await client
         .from("organizations")
         .select("id, name, slug, google_review_url")
         .eq("id", d.org.id)
         .limit(1);
-      const orgRow = (orgRows?.[0] as CloudOrg | undefined) ?? null;
+      // Si la columna google_review_url aún no existe (migración
+      // 007 sin aplicar), reintentar sin ella: la página no debe
+      // quedarse sin el negocio por una columna opcional.
+      let orgRow = (orgRows?.[0] as CloudOrg | undefined) ?? null;
+      if (!orgRow && orgError) {
+        const { data: baseRows } = await client
+          .from("organizations")
+          .select("id, name, slug")
+          .eq("id", d.org.id)
+          .limit(1);
+        orgRow = (baseRows?.[0] as CloudOrg | undefined) ?? null;
+        if (orgRow) orgRow.google_review_url = null;
+      }
       if (orgRow) {
         setCloudOrg(orgRow);
         setGoogleUrl(orgRow.google_review_url ?? "");
