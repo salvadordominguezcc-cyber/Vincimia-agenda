@@ -13,6 +13,7 @@ export const DEFAULT_POLICY = "PARTICULAR /SALVADOR";
 export const DEFAULT_PROMOTION = "VALORACIÓN";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { attachClinicOffset, clinicWallISO } from "./clinic-time";
 import {
   detectPhoneCountry,
   normalizePhone,
@@ -203,10 +204,9 @@ export async function checkCloudOverlap(
 ): Promise<{ clash: boolean; inBreak: boolean }> {
   // Las horas llegan en hora local de la clínica ("2026-11-27T11:30:00",
   // sin desfase) y las de Supabase en UTC. Para compararlas, las dos se
-  // pasan a "hora de pared": la de la nube se baja 6 horas (UTC-6, sin
-  // horario de verano) y la nueva se lee tal cual.
-  const toWall = (iso: string) =>
-    new Date(new Date(iso).getTime() - 6 * 60 * 60 * 1000);
+  // pasan a "hora de pared": la de la nube se convierte a hora de
+  // Mexicali y la nueva se lee tal cual.
+  const toWall = (iso: string) => new Date(clinicWallISO(iso));
   const start = new Date(startISO);
   const end = new Date(start.getTime() + durationMinutes * 60_000);
   // Misma regla que findConflict en el panel: una cita con doctor solo
@@ -239,8 +239,9 @@ export async function checkCloudOverlap(
 }
 
 /** Inserta la cita en la nube. startISO en hora local de la clínica;
- *  se guarda con el desfase -06:00 para que Supabase lo tome como la
- *  hora de la clínica (sin horario de verano desde 2022). */
+ *  se guarda con el desfase de Mexicali (America/Tijuana, -08:00 en
+ *  invierno y -07:00 en verano) para que Supabase lo tome como la
+ *  hora de la clínica. */
 export async function insertCloudAppointment(
   supabase: SupabaseClient,
   input: {
@@ -261,7 +262,8 @@ export async function insertCloudAppointment(
   const end = new Date(start.getTime() + input.durationMinutes * 60_000);
   const toTz = (d: Date) => {
     const p = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00-06:00`;
+    const wall = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`;
+    return attachClinicOffset(wall);
   };
   const { data, error } = await supabase
     .from("appointments")

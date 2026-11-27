@@ -17,6 +17,7 @@
 export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
+import { clinicDayRange, clinicWallISO } from "@/lib/clinic-time";
 import {
   checkCloudOverlap,
   defaultBookingNotes,
@@ -107,20 +108,17 @@ export async function POST(req: Request) {
       );
       // ¿Ya está en la nube? Mismo contacto y misma hora de inicio.
       if (contactId) {
+        const dayRange = clinicDayRange(startISO);
         const { data: existing } = await supabase
           .from("appointments")
           .select("id, start_time")
           .eq("organization_id", organizationId)
           .eq("contact_id", contactId)
-          .gte("start_time", `${startISO.slice(0, 10)}T00:00:00-06:00`)
-          .lt("start_time", `${startISO.slice(0, 10)}T23:59:59-06:00`)
+          .gte("start_time", dayRange.start)
+          .lt("start_time", dayRange.end)
           .limit(50);
         const same = (existing ?? []).find((e) => {
-          const wall = new Date(
-            new Date((e as { start_time: string }).start_time).getTime() - 6 * 60 * 60 * 1000
-          )
-            .toISOString()
-            .slice(0, 19);
+          const wall = clinicWallISO((e as { start_time: string }).start_time);
           return wall === startISO;
         });
         if (same) {

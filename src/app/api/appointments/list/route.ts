@@ -9,12 +9,12 @@
 export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
+import { clinicWallISO } from "@/lib/clinic-time";
 
 /** Instante UTC → "YYYY-MM-DDTHH:MM:00" en hora de la clínica
- *  (UTC-6, sin horario de verano): el formato que usa el panel. */
+ *  (Mexicali): el formato que usa el panel. */
 function toWallISO(iso: string): string {
-  const d = new Date(new Date(iso).getTime() - 6 * 60 * 60 * 1000);
-  return d.toISOString().slice(0, 19);
+  return clinicWallISO(iso);
 }
 
 export async function GET(req: Request) {

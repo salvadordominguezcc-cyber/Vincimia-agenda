@@ -5,6 +5,17 @@
 // esto corre: la página Conectores dice Pendiente y por qué.
 
 import { formatPhoneDisplay, normalizeStoredPhone } from "./phone";
+import {
+  attachClinicOffset,
+  CLINIC_TIME_ZONE,
+  clinicWallISO,
+  formatClinicDate,
+  formatClinicTime12,
+} from "./clinic-time";
+
+/** Zona horaria de las clínicas: Mexicali (America/Tijuana). La hora
+ *  y el desfase viven en src/lib/clinic-time.ts. */
+export { CLINIC_TIME_ZONE };
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -17,10 +28,6 @@ export const GOOGLE_SCOPES = [
   "email",
   "profile",
 ].join(" ");
-
-/** Zona horaria de las clínicas (sin horario de verano desde 2022). */
-export const CLINIC_TIME_ZONE = "America/Mexico_City";
-const MX_OFFSET = "-06:00";
 
 export function googleConfigured(): boolean {
   return Boolean(
@@ -214,25 +221,14 @@ export function statusEmoji(status: string): string {
   return status === "confirmed" || status === "completed" ? "🟢" : "🟡";
 }
 
-const dayLongFmt = new Intl.DateTimeFormat("es-MX", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-});
-const time12Fmt = new Intl.DateTimeFormat("es-MX", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: true,
-});
-
 /** Texto que se le manda al paciente por WhatsApp, con el mismo
  *  formato que usa la clínica hoy: "Hola, tienes una cita el jueves,
  *  12 de noviembre, a las 02:00 p. m. con Dental dentiplus Mexicali."
- *  El nombre del negocio sale de la organización (Ajustes). */
+ *  El nombre del negocio sale de la organización (Ajustes). Fecha y
+ *  hora en hora de la clínica (Mexicali). */
 export function clientWhatsAppText(appt: AppointmentForGoogle): string {
-  const date = new Date(`${appt.start_time.slice(0, 10)}T12:00:00`);
-  const day = dayLongFmt.format(date);
-  const time = time12Fmt.format(new Date(`2000-01-01T${appt.start_time.slice(11, 16)}:00`));
+  const day = formatClinicDate(appt.start_time);
+  const time = formatClinicTime12(appt.start_time);
   return `Hola, tienes una cita el ${day}, a las ${time} con ${appt.orgName}.`;
 }
 
@@ -249,11 +245,12 @@ export function clientWhatsAppLink(appt: AppointmentForGoogle): string | null {
   )}`;
 }
 
-/** Las citas se guardan como hora local (ej. "2026-11-19T10:00:00").
- *  Google necesita fecha con zona horaria: se fija la de la clínica. */
-function toGoogleDateTime(localISO: string): string {
-  const clean = localISO.slice(0, 19);
-  return `${clean}${MX_OFFSET}`;
+/** Las citas se guardan como instantes (o como hora local con
+ *  desfase). Google necesita fecha con zona horaria: se convierte a
+ *  hora de pared de la clínica con su desfase correcto (Mexicali). */
+function toGoogleDateTime(iso: string): string {
+  const wall = clinicWallISO(iso);
+  return attachClinicOffset(wall);
 }
 
 /** Formato de evento igual al que usa la clínica en su Google

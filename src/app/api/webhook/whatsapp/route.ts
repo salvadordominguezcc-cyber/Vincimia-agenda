@@ -17,6 +17,7 @@
 export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
+import { formatClinicDate, formatClinicTime } from "@/lib/clinic-time";
 import {
   isFirstVisitCloud,
   loadAppointmentFull,
@@ -124,12 +125,8 @@ export async function POST(req: Request) {
         }
         const appt = await loadAppointmentFull(supabase, contact.organization_id, apptRow.id);
         if (!appt) continue;
-        const date = new Intl.DateTimeFormat("es-MX", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        }).format(new Date(`${appt.start_time.slice(0, 10)}T12:00:00`));
-        const time = appt.start_time.slice(11, 16);
+        const date = formatClinicDate(appt.start_time);
+        const time = formatClinicTime(appt.start_time);
         if (text.includes("confirmo") || text === "si" || text === "sí" || text === "acepto") {
           if (appt.status === "on_hold") {
             await sendWhatsAppText(

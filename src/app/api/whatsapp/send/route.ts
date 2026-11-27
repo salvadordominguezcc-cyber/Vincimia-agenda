@@ -11,6 +11,7 @@
 export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
+import { formatClinicDate, formatClinicTime } from "@/lib/clinic-time";
 import {
   confirmationTextCloud,
   isFirstVisitCloud,
@@ -82,16 +83,12 @@ export async function POST(req: Request) {
   }
   const first = await isFirstVisitCloud(supabase, appt);
   const text = confirmationTextCloud(org.name, appt, first);
-  const date = new Intl.DateTimeFormat("es-MX", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(new Date(`${appt.start_time.slice(0, 10)}T12:00:00`));
+  const date = formatClinicDate(appt.start_time);
   try {
     const sent = await sendWhatsAppConfirmation(
       to,
       text,
-      [appt.contactName, appt.serviceName, date, appt.start_time.slice(11, 16)]
+      [appt.contactName, appt.serviceName, date, formatClinicTime(appt.start_time)]
     );
     await supabase
       .from("appointments")

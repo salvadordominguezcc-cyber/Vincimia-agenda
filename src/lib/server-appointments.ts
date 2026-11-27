@@ -8,6 +8,7 @@
 // copiar a mano, como antes.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatClinicDate, formatClinicTime } from "./clinic-time";
 import {
   createGoogleEvent,
   deleteGoogleEvent,
@@ -170,19 +171,15 @@ export async function isFirstVisitCloud(
   return !data || data.length === 0;
 }
 
-const dayFmt = new Intl.DateTimeFormat("es-MX", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-});
-
+/** Texto de confirmación de una cita en la nube. Fecha y hora en
+ *  hora de la clínica (Mexicali). */
 export function confirmationTextCloud(
   orgName: string,
   appt: ApptFull,
   firstVisit: boolean
 ): string {
-  const date = dayFmt.format(new Date(`${appt.start_time.slice(0, 10)}T12:00:00`));
-  const time = appt.start_time.slice(11, 16);
+  const date = formatClinicDate(appt.start_time);
+  const time = formatClinicTime(appt.start_time);
   let text =
     `Hola ${appt.contactName}, tu cita en ${orgName} está confirmada: ` +
     `${appt.serviceName}${appt.doctorName ? ` con ${appt.doctorName}` : ""} el ${date} a las ${time}.`;

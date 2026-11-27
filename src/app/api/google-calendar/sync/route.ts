@@ -14,6 +14,7 @@
 export const runtime = "edge";
 
 import { findConflict, overlapsBreak } from "@/lib/anti-overlap";
+import { clinicWallISO } from "@/lib/clinic-time";
 import {
   listGoogleEvents,
   refreshGoogleAccessToken,
@@ -27,12 +28,10 @@ import { supabaseServer } from "@/lib/supabase";
 
 const BLOCKING = ["pending", "confirmed", "completed"];
 
-/** "2026-11-19T10:00:00-06:00" → "2026-11-19T10:00:00" (hora de la
- *  clínica, como se guardan las citas en este proyecto). */
+/** Instante de Google ("2026-11-19T10:00:00-08:00") → "2026-11-19T10:00:00"
+ *  (hora de la clínica, como se guardan las citas en este proyecto). */
 function toWallISO(dateTime: string): string {
-  const d = new Date(dateTime);
-  const mx = new Date(d.getTime() - 6 * 60 * 60 * 1000);
-  return mx.toISOString().slice(0, 19);
+  return clinicWallISO(dateTime);
 }
 
 export async function POST(req: Request) {

@@ -23,6 +23,7 @@
 export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
+import { clinicDateOf, clinicTimeOf } from "@/lib/clinic-time";
 import { loadAppointmentFull, loadOrg, type ApptFull } from "@/lib/server-appointments";
 
 interface ReceiverResult {
@@ -127,8 +128,8 @@ export async function POST(req: Request) {
     organization_id: organizationId,
     appointment_id: appointmentId || null,
     patient_name: patientName,
-    start_date: startTime.slice(0, 10),
-    start_time: startTime.slice(11, 16),
+    start_date: clinicDateOf(startTime),
+    start_time: clinicTimeOf(startTime),
     service_name: serviceName,
     treatment: serviceName,
     promotion,

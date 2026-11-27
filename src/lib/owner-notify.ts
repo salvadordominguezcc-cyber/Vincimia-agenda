@@ -18,6 +18,7 @@
 // ("fuera de la ventana de 24 horas") y NO se finge que se envió.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { formatClinicDate, formatClinicTime } from "./clinic-time";
 import { normalizePhone, sendWhatsAppText, whatsappConfigured } from "./whatsapp";
 import { formatPhoneDisplay } from "./phone";
 import type { ApptFull, OrgRow } from "./server-appointments";
@@ -34,12 +35,6 @@ const CHANNEL_LABEL: Record<string, string> = {
   google_calendar: "Google Calendar",
 };
 
-const dayFmt = new Intl.DateTimeFormat("es-MX", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-});
-
 export interface OwnerCardInput {
   /** Nombre del promotor que trajo la cita (si viene de la hoja o del
    *  bot). Sin promotor, la póliza por defecto ya dice SALVADOR. */
@@ -54,14 +49,15 @@ export interface OwnerCardInput {
 }
 
 /** Texto del FORMATO DE CITA ya lleno, listo para reenviar al grupo
- *  de promotores (y al prospecto, con la línea de recepción). */
+ *  de promotores (y al prospecto, con la línea de recepción). Fecha y
+ *  hora en hora de la clínica (Mexicali). */
 export function buildOwnerCardText(
   orgName: string,
   appt: ApptFull,
   input: OwnerCardInput = {}
 ): string {
-  const date = dayFmt.format(new Date(`${appt.start_time.slice(0, 10)}T12:00:00`));
-  const time = appt.start_time.slice(11, 16);
+  const date = formatClinicDate(appt.start_time);
+  const time = formatClinicTime(appt.start_time);
   const promotion = (input.promotion ?? appt.serviceName ?? "VALORACIÓN").trim() || "VALORACIÓN";
   const policy = (input.policy ?? "PARTICULAR /SALVADOR").trim().toUpperCase() || "PARTICULAR /SALVADOR";
   const channel = CHANNEL_LABEL[appt.source] ?? appt.source ?? "Link público";
