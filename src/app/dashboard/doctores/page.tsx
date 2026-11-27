@@ -49,6 +49,7 @@ function newId(): string {
 
 /** Resume el horario en palabras normales: "Lun–Vie 9:00–18:00 · Sáb 9:00–14:00". */
 function scheduleSummary(schedule: DoctorScheduleDay[]): string {
+  if (!Array.isArray(schedule)) return "Sin horarios";
   const active = schedule.filter((d) => d.active);
   if (active.length === 0) return "Sin horarios";
   const groups: { days: number[]; start: string; end: string }[] = [];
@@ -114,7 +115,7 @@ export default function DoctoresPage() {
     // puede cambiar a mano después.
     setColor(doc ? doc.color : doctorColorForSpecialty("general"));
     setRequiresDeposit(doc ? doc.requires_deposit : false);
-    setSchedule(doc ? doc.schedule : defaultSchedule());
+    setSchedule(doc && Array.isArray(doc.schedule) ? doc.schedule : defaultSchedule());
     setError("");
     setMessage("");
   };

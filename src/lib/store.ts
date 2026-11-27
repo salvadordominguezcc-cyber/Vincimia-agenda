@@ -181,7 +181,7 @@ export function doctorWorksAt(
   durationMinutes: number
 ): { ok: boolean; reason?: string } {
   const weekday = new Date(`${dateISO}T12:00:00`).getDay();
-  const day = doctor.schedule.find((d) => d.weekday === weekday);
+  const day = (doctor.schedule ?? []).find((d) => d.weekday === weekday);
   if (!day || !day.active) {
     return { ok: false, reason: "ese día no atiende" };
   }

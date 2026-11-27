@@ -13,7 +13,8 @@ import {
   saveStore,
   type StoreData,
 } from "./store";
-import type { Appointment, Contact, Doctor, Organization, Service } from "./types";
+import type { Appointment, Contact, Doctor, DoctorScheduleDay, Organization, Service } from "./types";
+import { SPECIALTIES, doctorColorForSpecialty } from "./types";
 import { supabaseConfigured } from "./supabase";
 
 /** Nombre sin acentos, en minúsculas: para juntar "Valoracion" del
@@ -67,6 +68,39 @@ export async function fetchPublicCatalog(slug: string): Promise<CatalogBundle | 
     org: json.org ?? null,
     services: json.services ?? [],
     doctors: json.doctors ?? [],
+  };
+}
+
+/** Normaliza un doctor que viene de la nube: los de ejemplo en
+ *  Supabase no traen horario (schedule null) y el panel llama
+ *  schedule.filter(...) al pintarlos. Sin esto, la pestaña Doctores
+ *  se cae con "Application error: a client-side exception has
+ *  occurred". La nube manda, pero con forma segura. */
+function normalizeCloudDoctor(cloud: Doctor, organizationId: string): Doctor {
+  const rawSchedule = (cloud as Doctor).schedule;
+  const schedule: DoctorScheduleDay[] = Array.isArray(rawSchedule)
+    ? rawSchedule.filter(
+        (d) =>
+          d &&
+          typeof d.weekday === "number" &&
+          typeof d.start === "string" &&
+          typeof d.end === "string"
+      )
+    : [];
+  const specialty = (SPECIALTIES as string[]).includes(cloud.specialty as string)
+    ? cloud.specialty
+    : "general";
+  return {
+    ...cloud,
+    organization_id: organizationId,
+    specialty,
+    color:
+      typeof cloud.color === "string" && cloud.color.trim() !== ""
+        ? cloud.color
+        : doctorColorForSpecialty(specialty),
+    schedule,
+    requires_deposit: Boolean(cloud.requires_deposit),
+    active: cloud.active !== false,
   };
 }
 
@@ -153,9 +187,9 @@ export function mergeCatalogIntoStore(
     );
     if (idx >= 0) {
       if (mergedDoctors[idx].id !== cloud.id) doctorIdMap.set(mergedDoctors[idx].id, cloud.id);
-      mergedDoctors[idx] = { ...cloud, organization_id: next.org.id };
+      mergedDoctors[idx] = normalizeCloudDoctor(cloud, next.org.id);
     } else {
-      mergedDoctors.push({ ...cloud, organization_id: next.org.id });
+      mergedDoctors.push(normalizeCloudDoctor(cloud, next.org.id));
     }
   }
   const appointments =

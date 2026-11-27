@@ -10,6 +10,7 @@ export const runtime = "edge";
 
 import { supabaseServer } from "@/lib/supabase";
 import { authSecret, fetchOrgForCatalog, verifyOrgSecret } from "@/lib/server-catalog";
+import { SPECIALTIES, doctorColorForSpecialty, type Doctor } from "@/lib/types";
 
 export async function GET(req: Request) {
   const supabase = supabaseServer();
@@ -36,6 +37,24 @@ export async function GET(req: Request) {
     ok: true,
     org,
     services: services.data ?? [],
-    doctors: doctors.data ?? [],
+    // Los doctores de ejemplo en Supabase no traen horario (schedule
+    // null) y el panel llama schedule.filter(...) al pintarlos: sin
+    // esta forma segura, la pestaña Doctores se cae. El panel además
+    // normaliza al mezclar, esto es defensa en la ruta.
+    doctors: (doctors.data ?? []).map((d) => {
+      const doctor = d as unknown as Doctor;
+      const specialty = (SPECIALTIES as string[]).includes(doctor.specialty as string)
+        ? doctor.specialty
+        : "general";
+      return {
+        ...doctor,
+        specialty,
+        color:
+          typeof doctor.color === "string" && doctor.color.trim() !== ""
+            ? doctor.color
+            : doctorColorForSpecialty(specialty),
+        schedule: Array.isArray(doctor.schedule) ? doctor.schedule : [],
+      };
+    }),
   });
 }
