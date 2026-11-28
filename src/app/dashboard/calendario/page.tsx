@@ -32,6 +32,7 @@ import {
 } from "@/lib/store";
 import { DoctorChip, textOnColor } from "@/components/DoctorChip";
 import { GroupNoticeToggle } from "@/components/GroupNotice";
+import { SheetsPushButton } from "@/components/SheetsPush";
 import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
 import { notifyAppointmentStatus, notifyGroupNoticed } from "@/lib/notify-channels";
 import { isCloudId, syncDown } from "@/lib/cloud-sync";
@@ -638,6 +639,19 @@ export default function CalendarioPage() {
                   <XCircle className="h-4 w-4" /> Cancelar
                 </Button>
               )}
+              {/* Empuje manual a la hoja de promotores: solo esta cita,
+                  solo cuando el dueño lo pide. Confirmar no empuja. */}
+              <SheetsPushButton
+                key={selected.id}
+                organizationId={data.org.id}
+                secret={data.org.excel_webhook_secret}
+                appointmentId={selected.id}
+                disabled={
+                  !isCloudId(selected.id) ||
+                  selected.status === "cancelled" ||
+                  selected.status === "conflict"
+                }
+              />
               <Button
                 size="sm"
                 variant="danger"
@@ -655,6 +669,14 @@ export default function CalendarioPage() {
                 </span>
               )}
             </div>
+            {(!isCloudId(selected.id) ||
+              selected.status === "cancelled" ||
+              selected.status === "conflict") && (
+              <p className="pt-2 text-xs text-slate-500">
+                Esta cita no se puede enviar a la hoja: solo las citas que
+                están en la nube y no están canceladas ni en conflicto.
+              </p>
+            )}
             {confirmDelete && (
               <div className="mt-2 rounded-lg border-2 border-red-200 bg-red-50 p-3">
                 <p className="text-sm font-medium text-red-800">

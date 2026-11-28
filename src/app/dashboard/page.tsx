@@ -7,6 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DoctorChip } from "@/components/DoctorChip";
 import { GroupNoticeToggle } from "@/components/GroupNotice";
+import {
+  describePushResult,
+  pushOutcomeText,
+  type SheetPushOutcome,
+} from "@/components/SheetsPush";
+import { pushAppointmentToSheets } from "@/lib/sheets-push";
 import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
 import { isCloudId } from "@/lib/cloud-sync";
 import { notifyAppointmentStatus, notifyGroupNoticed } from "@/lib/notify-channels";
@@ -51,6 +57,12 @@ export default function AgendaPage() {
     "confirmacion"
   );
   const [copied, setCopied] = useState(false);
+  // Empuje manual a la hoja de promotores: el dueño elige qué citas
+  // se envían (casillas) y ve el resultado de cada una. Solo manual:
+  // confirmar una cita NO empuja nada a la hoja.
+  const [selectedSheets, setSelectedSheets] = useState<Record<string, boolean>>({});
+  const [sheetResults, setSheetResults] = useState<Record<string, SheetPushOutcome>>({});
+  const [pushingSheets, setPushingSheets] = useState(false);
 
   useEffect(() => {
     setData(loadStore());
@@ -64,6 +76,42 @@ export default function AgendaPage() {
   const conflicts = day.filter((a) => a.status === "conflict");
   const completedToday = day.filter((a) => a.status === "completed");
   const incomeCompleted = completedToday.reduce((s, a) => s + a.price, 0);
+
+  // Solo se puede enviar a la hoja una cita que vive en la nube y que
+  // no está cancelada ni en conflicto.
+  const pushable = (a: (typeof day)[number]) =>
+    isCloudId(a.id) && a.status !== "cancelled" && a.status !== "conflict";
+  const pushableDay = day.filter(pushable);
+  const selectedIds = pushableDay.filter((a) => selectedSheets[a.id]).map((a) => a.id);
+  const allSelected =
+    pushableDay.length > 0 && selectedIds.length === pushableDay.length;
+  const sheetSent = Object.values(sheetResults).filter((r) => r.ok).length;
+  const sheetFailed = Object.values(sheetResults).filter((r) => !r.ok).length;
+
+  // Envía solo las citas seleccionadas, una por una, y anota el
+  // resultado de cada una (Paciente 1 o 2, o el motivo del fallo).
+  const sendSelectedToSheets = async () => {
+    if (selectedIds.length === 0 || pushingSheets) return;
+    setPushingSheets(true);
+    setSheetResults({});
+    for (const id of selectedIds) {
+      const result = await pushAppointmentToSheets(
+        data.org.id,
+        data.org.excel_webhook_secret,
+        id
+      );
+      const outcome = describePushResult(result);
+      setSheetResults((prev) => ({ ...prev, [id]: outcome }));
+    }
+    setPushingSheets(false);
+  };
+
+  // Al cambiar de día se limpia la selección y los resultados.
+  const changeDate = (next: string) => {
+    setDate(next);
+    setSelectedSheets({});
+    setSheetResults({});
+  };
 
   const change = (id: string, status: StatusType) => {
     const next = setStatus({ ...data }, id, status);
@@ -164,7 +212,7 @@ export default function AgendaPage() {
           <Input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => changeDate(e.target.value)}
             className="w-auto"
           />
           <Link href="/dashboard/nueva">
@@ -257,9 +305,79 @@ export default function AgendaPage() {
         </Card>
       ) : (
         <div className="space-y-3">
+          {/* Empuje manual a la hoja: se eligen las citas con las
+              casillas y se envían solo esas, una por una. */}
+          {pushableDay.length > 0 && (
+            <Card>
+              <CardContent className="flex flex-wrap items-center gap-3 py-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    disabled={pushingSheets}
+                    onChange={(e) => {
+                      const next: Record<string, boolean> = {};
+                      if (e.target.checked) {
+                        for (const a of pushableDay) next[a.id] = true;
+                      }
+                      setSelectedSheets(next);
+                    }}
+                  />
+                  Seleccionar todas
+                </label>
+                <span className="text-sm text-slate-600">
+                  {selectedIds.length} seleccionada(s)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={sendSelectedToSheets}
+                  disabled={selectedIds.length === 0 || pushingSheets}
+                >
+                  {pushingSheets
+                    ? "Enviando…"
+                    : `Enviar a la hoja (${selectedIds.length})`}
+                </Button>
+                {sheetFailed > 0 || sheetSent > 0 ? (
+                  <span className="text-sm">
+                    <span className="font-medium text-green-700">
+                      En la hoja: {sheetSent}
+                    </span>
+                    {sheetFailed > 0 && (
+                      <span className="ml-2 font-medium text-red-700">
+                        Fallidas: {sheetFailed}
+                      </span>
+                    )}
+                  </span>
+                ) : null}
+                <span className="text-xs text-slate-500">
+                  Solo se envían las que elijas. Confirmar una cita no la
+                  manda sola a la hoja.
+                </span>
+              </CardContent>
+            </Card>
+          )}
           {day.map((a) => (
             <Card key={a.id} className={cn(a.status === "conflict" && "border-red-300")}>
               <CardContent className="flex flex-wrap items-center gap-3 py-4">
+                <input
+                  type="checkbox"
+                  aria-label={`Seleccionar cita de ${contactName(data, a.contact_id)} para enviar a la hoja`}
+                  checked={!!selectedSheets[a.id]}
+                  disabled={!pushable(a) || pushingSheets}
+                  title={
+                    pushable(a)
+                      ? "Seleccionar para enviar a la hoja"
+                      : "Solo se pueden enviar las citas que están en la nube y no están canceladas ni en conflicto"
+                  }
+                  onChange={(e) =>
+                    setSelectedSheets((prev) => ({
+                      ...prev,
+                      [a.id]: e.target.checked,
+                    }))
+                  }
+                  className="h-4 w-4 shrink-0 accent-brand-600"
+                />
                 <div className="flex h-12 w-16 flex-col items-center justify-center rounded-lg bg-brand-50 font-bold text-brand-700">
                   {fmtTime(a.start_time)}
                   <span className="text-xs font-normal text-slate-500">
@@ -298,6 +416,16 @@ export default function AgendaPage() {
                       onToggle={() => toggleGroupNotice(a.id)}
                     />
                   </p>
+                  {sheetResults[a.id] && (
+                    <p
+                      className={cn(
+                        "mt-1 text-xs font-medium",
+                        sheetResults[a.id].ok ? "text-green-700" : "text-red-700"
+                      )}
+                    >
+                      Hoja: {pushOutcomeText(sheetResults[a.id])}
+                    </p>
+                  )}
                   {a.status === "on_hold" && (
                     <div className="mt-2 rounded-lg bg-violet-50 p-3 text-sm">
                       <p className="font-medium text-violet-900">
