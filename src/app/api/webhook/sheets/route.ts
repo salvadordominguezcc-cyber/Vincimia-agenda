@@ -123,16 +123,55 @@ export async function POST(req: Request) {
   }
 
   // 4) Anti-empalme contra las citas que bloquean (pending/confirmed/completed).
+  // La hoja permite Paciente 1 y Paciente 2 a la MISMA hora (prospectos de
+  // primera vez, tratamientos cortos): el script adaptado manda patient_slot
+  // (1 o 2) y el servidor lo guarda en las notas como [patient_slot:N]
+  // (no hay columna propia en appointments; no se agregan columnas). Regla:
+  // a una misma hora de inicio caben como máximo 2 citas de la hoja, una
+  // por slot; la 3ra, o repetir el mismo slot, es conflicto. Sin
+  // patient_slot se mantiene la regla vieja: cualquier empalme es conflicto.
   const start = new Date(startTime);
   const end = new Date(start.getTime() + duration * 60_000);
+  const patientSlot =
+    body.patient_slot === 2 || body.patient_slot === "2"
+      ? 2
+      : body.patient_slot === 1 || body.patient_slot === "1"
+        ? 1
+        : null;
+  const slotOf = (a: { source?: string | null; notes?: string | null }): number | null => {
+    if (a.source !== "excel_promoter") return null;
+    const m = /\[patient_slot:([12])\]/.exec(a.notes ?? "");
+    return m ? Number(m[1]) : null;
+  };
   const { data: existing } = await supabase
     .from("appointments")
-    .select("id, start_time, end_time, status")
+    .select("id, start_time, end_time, status, source, notes")
     .eq("organization_id", organizationId)
     .in("status", BLOCKING);
-  const clash = (existing ?? []).find((a) =>
-    overlaps(start, end, new Date(a.start_time), new Date(a.end_time), buffer)
+  const list = existing ?? [];
+  // Citas de la hoja a la misma hora de inicio (mismo instante).
+  const sameStartSheet = list.filter(
+    (a) =>
+      new Date(a.start_time).getTime() === start.getTime() &&
+      a.source === "excel_promoter"
   );
+  const sameSlotTaken =
+    patientSlot !== null && sameStartSheet.some((a) => slotOf(a) === patientSlot);
+  const slotCapReached = patientSlot !== null && sameStartSheet.length >= 2;
+  // Empalme normal, con una excepción: una cita de la hoja a la misma
+  // hora de inicio con el OTRO slot no bloquea (son los 2 lugares de
+  // la hoja); el tope de 2 se revisa aparte.
+  const clash = list.find((a) => {
+    if (
+      patientSlot !== null &&
+      new Date(a.start_time).getTime() === start.getTime() &&
+      slotOf(a) !== null &&
+      slotOf(a) !== patientSlot
+    ) {
+      return false;
+    }
+    return overlaps(start, end, new Date(a.start_time), new Date(a.end_time), buffer);
+  });
   // El tiempo de descanso también bloquea: se registra como conflicto.
   const reqStartMin = start.getHours() * 60 + start.getMinutes();
   const inBreak =
@@ -165,9 +204,11 @@ export async function POST(req: Request) {
     contactId = created?.id ?? null;
   }
 
-  // 6) Si choca (o cae en el tiempo de descanso): se guarda como
-  // conflict (registro, sin bloquear ni comisionar).
-  if (clash || inBreak) {
+  // 6) Si choca (o cae en el tiempo de descanso, o ya hay 2 pacientes
+  // de la hoja a esa hora): se guarda como conflict (registro, sin
+  // bloquear ni comisionar).
+  const slotFull = sameSlotTaken || slotCapReached;
+  if (clash || inBreak || slotFull) {
     const { data: saved } = await supabase
       .from("appointments")
       .insert({
@@ -183,7 +224,9 @@ export async function POST(req: Request) {
         source: "excel_promoter",
         notes: inBreak
           ? `CONFLICTO (Sheets): cae en el tiempo de descanso de la clínica (${org.break_start}–${org.break_end}).`
-          : `CONFLICTO (Sheets): choca con la cita ${clash!.id} ${clash!.start_time}–${clash!.end_time}.`,
+          : slotFull
+            ? `CONFLICTO (Sheets): a las ${startTime} ya hay 2 pacientes de la hoja (Paciente 1 y Paciente 2).${patientSlot ? ` [patient_slot:${patientSlot}]` : ""}`
+            : `CONFLICTO (Sheets): choca con la cita ${clash!.id} ${clash!.start_time}–${clash!.end_time}.${patientSlot ? ` [patient_slot:${patientSlot}]` : ""}`,
       })
       .select("id")
       .single();
@@ -193,7 +236,9 @@ export async function POST(req: Request) {
       appointment_id: saved?.id ?? null,
       message: inBreak
         ? `Ese horario cae en el tiempo de descanso (${org.break_start}–${org.break_end}). La cita quedó registrada como conflicto.`
-        : `Horario ocupado (${startTime}). La cita quedó registrada como conflicto.`,
+        : slotFull
+          ? `A esa hora ya hay 2 pacientes agendados (Paciente 1 y Paciente 2). La cita quedó registrada como conflicto.`
+          : `Horario ocupado (${startTime}). La cita quedó registrada como conflicto.`,
     });
   }
 
@@ -211,6 +256,9 @@ export async function POST(req: Request) {
       price,
       status: "pending",
       source: "excel_promoter",
+      notes: patientSlot
+        ? `[patient_slot:${patientSlot}] Paciente ${patientSlot} (hoja de promotores).`
+        : null,
     })
     .select("id")
     .single();
