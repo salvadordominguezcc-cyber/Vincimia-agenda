@@ -15,7 +15,7 @@
 export const runtime = "edge";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { notFound } from "next/navigation";
 import { freeSlots } from "@/lib/anti-overlap";
 import { todayISO } from "@/lib/demo-data";
 import {
@@ -27,7 +27,6 @@ import {
   type StoreData,
 } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   AppointmentCardView,
   BookingFields,
@@ -109,24 +108,11 @@ export default function ReservaPage({
     return <p className="p-6 text-slate-500">Cargando…</p>;
   }
 
+  // Slug desconocido: se muestra la página 404 personalizada de
+  // Dentiplus (src/app/not-found.tsx), que avisa al dueño por
+  // WhatsApp porque es un link de reserva roto.
   if (params.slug !== data.org.slug) {
-    return (
-      <div className="mx-auto max-w-xl p-6">
-        <Card>
-          <CardContent className="py-10 text-center">
-            <p className="font-semibold">Negocio no encontrado</p>
-            <p className="text-sm text-slate-500">
-              El link <code>/reserva/{params.slug}</code> no corresponde a
-              ningún negocio en este demo. Prueba con{" "}
-              <Link href="/reserva/clinica-dentiplus" className="text-brand-700 underline">
-                /reserva/clinica-dentiplus
-              </Link>
-              .
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    notFound();
   }
 
   const service = data.services.find((s) => s.id === serviceId);
