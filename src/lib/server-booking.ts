@@ -149,25 +149,48 @@ export async function findOrCreateContact(
   phone: string | null,
   phoneCountry?: PhoneCountry
 ): Promise<string | null> {
+  // El nombre que el paciente escribe al agendar manda: si el
+  // teléfono ya existía guardado con otro nombre (por ejemplo una
+  // cita de prueba vieja), la confirmación de WhatsApp y el evento
+  // de Google saldrían con el nombre guardado y no con el de la
+  // reserva. Por eso, al encontrar el contacto se actualiza su
+  // nombre al que se acaba de escribir (sin tocar el teléfono).
+  const name = fullName.trim();
   const normalized = normalizePhone(phone, phoneCountry ?? detectPhoneCountry(phone));
   if (normalized) {
     const { data: byPhone } = await supabase
       .from("contacts")
-      .select("id, phone")
+      .select("id, phone, full_name")
       .eq("organization_id", organizationId);
     const hit = (byPhone ?? []).find(
       (c) => normalizeStoredPhone((c as { phone?: string | null }).phone) === normalized
     );
-    if (hit) return (hit as { id: string }).id;
+    if (hit) {
+      if (name && (hit as { full_name?: string | null }).full_name !== name) {
+        await supabase
+          .from("contacts")
+          .update({ full_name: name })
+          .eq("id", (hit as { id: string }).id);
+      }
+      return (hit as { id: string }).id;
+    }
   }
   const { data: byName } = await supabase
     .from("contacts")
-    .select("id")
+    .select("id, full_name")
     .eq("organization_id", organizationId)
     .ilike("full_name", fullName)
     .limit(1)
     .single();
-  if (byName) return (byName as { id: string }).id;
+  if (byName) {
+    if (name && (byName as { full_name?: string | null }).full_name !== name) {
+      await supabase
+        .from("contacts")
+        .update({ full_name: name })
+        .eq("id", (byName as { id: string }).id);
+    }
+    return (byName as { id: string }).id;
+  }
   const { data: created } = await supabase
     .from("contacts")
     .insert({

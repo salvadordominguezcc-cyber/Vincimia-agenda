@@ -180,17 +180,26 @@ export async function POST(req: Request) {
     reqStartMin < toMin(org.break_end) &&
     toMin(org.break_start) < reqStartMin + duration;
 
-  // 5) Contacto: se crea si no existe (por teléfono o nombre).
+  // 5) Contacto: se crea si no existe (por teléfono o nombre). Si ya
+  // existe con otro nombre, se actualiza al que trae la hoja: el
+  // nombre de la reserva manda (si no, la confirmación y el evento
+  // de Google saldrían con un nombre viejo guardado).
   let contactId: string | null = null;
   const { data: contact } = await supabase
     .from("contacts")
-    .select("id")
+    .select("id, full_name")
     .eq("organization_id", organizationId)
     .or(`phone.eq.${clientPhone},full_name.ilike.${clientName}`)
     .limit(1)
     .single();
   if (contact) {
     contactId = contact.id;
+    if (clientName && (contact as { full_name?: string | null }).full_name !== clientName) {
+      await supabase
+        .from("contacts")
+        .update({ full_name: clientName })
+        .eq("id", contact.id);
+    }
   } else {
     const { data: created } = await supabase
       .from("contacts")
