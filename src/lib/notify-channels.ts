@@ -26,3 +26,30 @@ export function notifyAppointmentStatus(
     body: JSON.stringify({ organization_id: organizationId, appointment_id: appointmentId, status }),
   }).catch(() => undefined);
 }
+
+/** Guarda en la nube si la tarjeta de la cita ya se reenvió al grupo
+ *  de WhatsApp de promotores. Fire-and-forget, como el cambio de
+ *  estado: si la cita solo vive en el aparato, o la columna
+ *  group_notified aún no está aplicada en Supabase (migración 012),
+ *  el servidor responde con error y el valor se queda solo en este
+ *  aparato. */
+export function notifyGroupNoticed(
+  organizationId: string,
+  secret: string,
+  appointmentId: string,
+  notified: boolean
+): void {
+  if (!organizationId || !secret || !appointmentId) return;
+  fetch("/api/appointments/group-notice", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({
+      organization_id: organizationId,
+      appointment_id: appointmentId,
+      group_notified: notified,
+    }),
+  }).catch(() => undefined);
+}

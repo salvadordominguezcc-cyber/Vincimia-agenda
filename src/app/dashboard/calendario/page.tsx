@@ -22,15 +22,18 @@ import {
   doctorName,
   fmtTime,
   isFirstVisit,
+  isGroupNotified,
   loadStore,
   proposeTimes,
   serviceName,
+  setGroupNotified,
   setStatus,
   type StoreData,
 } from "@/lib/store";
 import { DoctorChip, textOnColor } from "@/components/DoctorChip";
+import { GroupNoticeToggle } from "@/components/GroupNotice";
 import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
-import { notifyAppointmentStatus } from "@/lib/notify-channels";
+import { notifyAppointmentStatus, notifyGroupNoticed } from "@/lib/notify-channels";
 import { isCloudId, syncDown } from "@/lib/cloud-sync";
 import { supabaseConfigured } from "@/lib/supabase";
 import { SOURCE_LABEL, SPECIALTY_LABEL, STATUS_EMOJI, STATUS_LABEL, money, type Appointment, type SourceType, type StatusType } from "@/lib/types";
@@ -280,6 +283,21 @@ export default function CalendarioPage() {
     if (!proposal.trim()) return;
     setData(proposeTimes({ ...data }, id, proposal));
     setHoldError("");
+  };
+
+  // Marca si la tarjeta de la cita ya se reenvió al grupo de WhatsApp
+  // de promotores (o la vuelve a pendiente si se marcó por error).
+  // Si la cita vive en la nube, se guarda allá también; si la columna
+  // aún no está aplicada en Supabase, el valor se queda solo en este
+  // aparato. No toca la confirmación, Google ni la hoja.
+  const toggleGroupNotice = (id: string) => {
+    const appt = data.appointments.find((a) => a.id === id);
+    if (!appt) return;
+    const nextValue = !isGroupNotified(appt);
+    setData(setGroupNotified({ ...data }, id, nextValue));
+    if (supabaseConfigured() && isCloudId(id)) {
+      notifyGroupNoticed(data.org.id, data.org.excel_webhook_secret, id, nextValue);
+    }
   };
 
   const confirmHold = (id: string) => {
@@ -560,6 +578,13 @@ export default function CalendarioPage() {
                 <strong>Notas:</strong> {selected.notes}
               </p>
             )}
+            <p>
+              <strong>Aviso al grupo:</strong>{" "}
+              <GroupNoticeToggle
+                notified={isGroupNotified(selected)}
+                onToggle={() => toggleGroupNotice(selected.id)}
+              />
+            </p>
             {selected.status === "on_hold" && (
               <div className="rounded-lg bg-violet-50 p-3">
                 <p className="font-medium text-violet-900">

@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DoctorChip } from "@/components/DoctorChip";
+import { GroupNoticeToggle } from "@/components/GroupNotice";
 import { confirmationMessage, reviewRequestMessage } from "@/lib/messages";
-import { notifyAppointmentStatus } from "@/lib/notify-channels";
+import { isCloudId } from "@/lib/cloud-sync";
+import { notifyAppointmentStatus, notifyGroupNoticed } from "@/lib/notify-channels";
 import { supabaseConfigured } from "@/lib/supabase";
 import {
   confirmAppointment,
@@ -16,10 +18,12 @@ import {
   doctorById,
   doctorName,
   fmtTime,
+  isGroupNotified,
   loadStore,
   proposeTimes,
   resetDemo,
   serviceName,
+  setGroupNotified,
   setStatus,
   type StoreData,
 } from "@/lib/store";
@@ -100,6 +104,21 @@ export default function AgendaPage() {
     if (!text.trim()) return;
     setData(proposeTimes({ ...data }, id, text));
     setHoldError("");
+  };
+
+  // Marca si la tarjeta de la cita ya se reenvió al grupo de WhatsApp
+  // de promotores (o la vuelve a pendiente si se marcó por error).
+  // Si la cita vive en la nube, se guarda allá también; si la columna
+  // aún no está aplicada en Supabase, el valor se queda solo en este
+  // aparato. No toca la confirmación, Google ni la hoja.
+  const toggleGroupNotice = (id: string) => {
+    const appt = data.appointments.find((a) => a.id === id);
+    if (!appt) return;
+    const nextValue = !isGroupNotified(appt);
+    setData(setGroupNotified({ ...data }, id, nextValue));
+    if (supabaseConfigured() && isCloudId(id)) {
+      notifyGroupNoticed(data.org.id, data.org.excel_webhook_secret, id, nextValue);
+    }
   };
 
   const confirmHold = (id: string) => {
@@ -272,6 +291,12 @@ export default function AgendaPage() {
                   <p className="text-xs text-slate-500">
                     Origen: {SOURCE_LABEL[a.source]}
                     {a.notes ? ` · ${a.notes}` : ""}
+                  </p>
+                  <p className="mt-1">
+                    <GroupNoticeToggle
+                      notified={isGroupNotified(a)}
+                      onToggle={() => toggleGroupNotice(a.id)}
+                    />
                   </p>
                   {a.status === "on_hold" && (
                     <div className="mt-2 rounded-lg bg-violet-50 p-3 text-sm">

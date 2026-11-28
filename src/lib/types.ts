@@ -270,6 +270,10 @@ export interface Appointment {
   proposed_times: string | null;
   whatsapp_confirmed: boolean;
   google_event_id: string | null;
+  /** Aviso al grupo de promotores: ¿la tarjeta de esta cita ya se
+   *  reenvió al grupo de WhatsApp? undefined = aún no marcado (se
+   *  muestra como Pendiente). Columna group_notified, migración 012. */
+  group_notified?: boolean;
   created_at: string;
 }
 

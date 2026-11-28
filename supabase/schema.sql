@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   notes TEXT,
   proposed_times TEXT,
   whatsapp_confirmed BOOLEAN NOT NULL DEFAULT false,
+  group_notified BOOLEAN NOT NULL DEFAULT false,
   google_event_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (end_time > start_time)

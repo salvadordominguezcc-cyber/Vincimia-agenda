@@ -426,11 +426,21 @@ export function mergeCloudIntoStore(data: StoreData, cloud: CloudBundle): StoreD
   const newAppts = cloud.appointments.filter((a) => !knownAppts.has(a.id));
   const knownContacts = new Set(data.contacts.map((c) => c.id));
   const newContacts = cloud.contacts.filter((c) => !knownContacts.has(c.id));
+  // La marca "aviso al grupo" de la nube manda sobre la del aparato
+  // cuando la nube la trae (columna de la migración 012 ya aplicada);
+  // si la nube no la trae, se conserva la del aparato.
+  const cloudById = new Map(cloud.appointments.map((a) => [a.id, a]));
   const withAppts: StoreData = {
     ...data,
-    appointments: [...data.appointments, ...newAppts].sort((a, b) =>
-      a.start_time.localeCompare(b.start_time)
-    ),
+    appointments: [...data.appointments, ...newAppts]
+      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+      .map((a) => {
+        const c = cloudById.get(a.id);
+        if (c && typeof c.group_notified === "boolean") {
+          return { ...a, group_notified: c.group_notified };
+        }
+        return a;
+      }),
     contacts: [...data.contacts, ...newContacts],
   };
   // Servicios y doctores: los de la nube mandan (por nombre, no solo

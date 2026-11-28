@@ -523,6 +523,30 @@ export function setStatus(
   return next;
 }
 
+/** Marca si la tarjeta de la cita ya se reenvió al grupo de WhatsApp
+ *  de promotores. Solo cambia la marca en el aparato: si la cita vive
+ *  en la nube, el panel avisa al servidor aparte (notifyGroupNoticed)
+ *  para que el teléfono y la laptop vean lo mismo tras sincronizar. */
+export function setGroupNotified(
+  data: StoreData,
+  id: string,
+  notified: boolean
+): StoreData {
+  const next: StoreData = {
+    ...data,
+    appointments: data.appointments.map((a) =>
+      a.id === id ? { ...a, group_notified: notified } : a
+    ),
+  };
+  saveStore(next);
+  return next;
+}
+
+/** ¿La tarjeta de esta cita ya se reenvió al grupo? Sin marcar = pendiente. */
+export function isGroupNotified(a: Appointment): boolean {
+  return a.group_notified === true;
+}
+
 /** Borra una cita del aparato (localStorage). No toca contactos ni
  *  servicios: solo desaparece la cita. Si la cita también vive en
  *  la nube, hay que borrarla allá con DELETE /api/appointments/delete
